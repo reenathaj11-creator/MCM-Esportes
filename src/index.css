@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #F5C800;
+  --color-brand-primary-dark: #C9A200;
+  --color-brand-bg: #0a1628;
+  --color-brand-card: #162040;
+  --color-brand-card-hover: #1c284f;
+  --color-brand-text: #FFFFFF;
+  --color-brand-muted: #8899BB;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-brand-text font-sans antialiased selection:bg-brand-primary selection:text-brand-bg;
+  }
+}
+
+@layer utilities {
+  .bg-glass {
+    @apply bg-brand-card/80 backdrop-blur-md border border-white/5;
+  }
+  
+  .glow-primary {
+    box-shadow: 0 0 40px rgba(245, 200, 0, 0.3);
+  }
+}
