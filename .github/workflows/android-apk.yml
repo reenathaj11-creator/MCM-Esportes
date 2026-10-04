@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Permite criar/editar a release "latest" (necessário para o QR Code do APK)
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
