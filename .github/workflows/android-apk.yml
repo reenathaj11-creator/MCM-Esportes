@@ -37,7 +37,8 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
+      - name: Aceitar licenças do Android SDK (já vem pré-instalado no runner)
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
 
       - name: Build do APK (debug, assinado c/ chave debug)
         working-directory: android
