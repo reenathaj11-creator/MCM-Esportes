@@ -6,6 +6,7 @@ import { useCamera } from '../../context/CameraContext';
 import { videoStorageService } from '../../services/VideoStorageService';
 import { LocalVideo } from '../../types/camera';
 import { ConnectionGuide } from '../components/ConnectionGuide';
+import { RefreshCw } from 'lucide-react';
 
 export default function Main() {
   const { role } = useAuth();
@@ -13,6 +14,13 @@ export default function Main() {
   const { isConnected, camera } = useCamera();
   const [isCapturing, setIsCapturing] = useState(false);
   const [captureProgress, setCaptureProgress] = useState(0);
+  const [previewError, setPreviewError] = useState(false);
+  const [previewRetry, setPreviewRetry] = useState(0);
+
+  // Quando reconectar, limpa o estado de erro do preview (tenta de novo)
+  useEffect(() => {
+    if (isConnected) setPreviewError(false);
+  }, [isConnected, previewRetry]);
 
   const handleCapture = async () => {
     setIsCapturing(true);
@@ -99,13 +107,26 @@ export default function Main() {
             </div>
           )}
 
-          {isConnected ? (
+          {isConnected && !previewError ? (
             // Preview MJPEG da câmera 70mai (stream de JPEGs; funciona em <img>)
             <img
+              key={previewRetry}
               src="http://192.168.0.1/cgi-bin/liveMJPEG"
               alt="Transmissão ao vivo da câmera"
               className="absolute inset-0 w-full h-full object-cover"
+              onError={() => setPreviewError(true)}
             />
+          ) : isConnected ? (
+            <>
+              <Camera size={40} className="text-brand-muted/30 mb-2" />
+              <p className="text-brand-muted text-sm mb-3">Preview indisponível no momento</p>
+              <button
+                onClick={() => { setPreviewError(false); setPreviewRetry(n => n + 1); }}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-brand-bg text-xs font-bold rounded-xl"
+              >
+                <RefreshCw size={14} /> Tentar novamente
+              </button>
+            </>
           ) : (
             <>
               <Camera size={40} className="text-brand-muted/30 mb-2" />

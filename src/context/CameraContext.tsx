@@ -20,16 +20,26 @@ export const CameraProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   // Monitoramento automático: verifica a câmera a cada 5s (bolinha verde/vermelha).
-  // Assim que o usuário conecta no WiFi da câmera, o app detecta sozinho.
+  // O servidor web da 70mai é instável (responde 503 sob carga), então só
+  // consideramos DESCONECTADA após 3 falhas consecutivas. Conexão é imediata.
   useEffect(() => {
     let cancelled = false;
+    let failures = 0;
 
     const check = async () => {
       try {
         const ok = await camera.connect();
-        if (!cancelled) setIsConnected(ok);
+        if (cancelled) return;
+        if (ok) {
+          failures = 0;
+          setIsConnected(true);
+        } else {
+          failures++;
+          if (failures >= 3) setIsConnected(false);
+        }
       } catch {
-        if (!cancelled) setIsConnected(false);
+        failures++;
+        if (!cancelled && failures >= 3) setIsConnected(false);
       }
     };
 
