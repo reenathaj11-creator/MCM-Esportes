@@ -52,11 +52,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const determineRole = (user: User) => {
-    // Se o email conter admin ou vier metadado "role", tratamos como admin
-    const isEmailAdmin = user.email?.includes('admin');
-    const isMetaAdmin = user.user_metadata?.role === 'admin';
+    // Permissão de admin via banco (app_metadata, somente-servidor) ou para o e-mail oficial do dono.
+    // NÃO usar user_metadata aqui: ele é gravável pelo próprio usuário no cadastro.
+    const isOwner = user.email === 'felipe.fschneider@gmail.com';
+    const isMetaAdmin = user.app_metadata?.role === 'admin';
     
-    setRole(isEmailAdmin || isMetaAdmin ? 'admin' : 'user');
+    setRole(isOwner || isMetaAdmin ? 'admin' : 'user');
     setIsLoading(false);
   };
 
