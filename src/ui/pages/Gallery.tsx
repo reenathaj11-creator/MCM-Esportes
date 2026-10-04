@@ -2,16 +2,34 @@ import React, { useEffect, useState } from 'react';
 import { videoStorageService } from '../../services/VideoStorageService';
 import { shareService } from '../../services/ShareService';
 import { LocalVideo } from '../../types/camera';
-import { Share2, Download, Trash2, ArrowLeft } from 'lucide-react';
+import { Share2, Download, Trash2, ArrowLeft, MessageCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const Gallery = () => {
   const [videos, setVideos] = useState<LocalVideo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [online, setOnline] = useState(navigator.onLine);
 
   useEffect(() => {
     loadVideos();
+    refreshPending();
+
+    const update = () => {
+      setOnline(navigator.onLine);
+      refreshPending();
+    };
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
   }, []);
+
+  const refreshPending = () => {
+    setPendingCount(shareService.getPendingShares().length);
+  };
 
   const loadVideos = async () => {
     setLoading(true);
@@ -21,7 +39,24 @@ export const Gallery = () => {
   };
 
   const handleShare = async (video: LocalVideo) => {
-    await shareService.shareVideo(video);
+    const result = await shareService.shareVideo(video);
+    if (result === 'queued') {
+      alert('Sem internet: o envio ficou pendente. Envie quando voltar ao 4G/5G.');
+    }
+    refreshPending();
+  };
+
+  const handleSendPending = async () => {
+    // Envia os vídeos pendentes agora que a internet voltou (requer toque do usuário)
+    for (const id of shareService.getPendingShares()) {
+      const video = await videoStorageService.getVideo(id);
+      if (video) {
+        await shareService.shareVideo(video);
+      } else {
+        shareService.removePending(id); // vídeo não existe mais localmente
+      }
+    }
+    refreshPending();
   };
 
   const handleDownload = (video: LocalVideo) => {
@@ -43,6 +78,22 @@ export const Gallery = () => {
         </Link>
         <h1 className="text-2xl font-bold tracking-tight">Galeria Local</h1>
       </div>
+
+      {pendingCount > 0 && (
+        <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded-2xl flex items-center justify-between">
+          <p className="text-sm text-green-300">
+            {pendingCount} envio(s) pendente(s) para o WhatsApp.
+          </p>
+          <button
+            onClick={handleSendPending}
+            disabled={!online}
+            className="px-4 py-2 bg-[#25D366] hover:bg-[#128C7E] disabled:opacity-40 text-white text-sm font-semibold rounded-xl flex items-center gap-2 transition-colors"
+          >
+            <MessageCircle size={16} />
+            {online ? 'Enviar agora' : 'Aguardando internet'}
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center text-gray-400 mt-20">Carregando vídeos...</div>

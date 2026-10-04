@@ -14,11 +14,22 @@ export class Real70maiProtocol {
 
   async getStatus() {
     try {
-      // Tenta um simples GET na raiz ou diretório para ver se a câmera responde
-      const response = await fetch(`${this.baseUrl}/mnt/`, { method: 'GET', mode: 'no-cors' });
-      // no-cors não nos dá status legível, então assumimos conectado se não lançar exceção
-      return true;
-    } catch (e) {
+      // Valida pelo CONTEÚDO: só considera conectado se o 192.168.0.1 responder
+      // algo que só a câmera teria (a listagem do /mnt/ com a pasta do cartão SD).
+      // Evita falso positivo quando 192.168.0.1 é o roteador da casa do usuário.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+
+      const response = await fetch(`${this.baseUrl}/mnt/`, {
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) return false;
+      const text = await response.text();
+      return /sd card|sdcard|mnt\/sd|MP4|Index of/i.test(text);
+    } catch {
       return false;
     }
   }

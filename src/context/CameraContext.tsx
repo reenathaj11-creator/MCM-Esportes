@@ -1,12 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { CameraService } from '../types/camera';
-import { MockCameraService } from '../services/camera/MockCameraService';
 import { Xiaomi70maiCameraService } from '../services/camera/70maiCameraService';
 
 interface CameraContextType {
   camera: CameraService;
-  useMock: boolean;
-  setUseMock: (useMock: boolean) => void;
   isConnected: boolean;
   connect: () => Promise<void>;
 }
@@ -14,23 +11,38 @@ interface CameraContextType {
 const CameraContext = createContext<CameraContextType | undefined>(undefined);
 
 export const CameraProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [useMock, setUseMock] = useState(true);
-  const [camera, setCamera] = useState<CameraService>(new MockCameraService());
+  const [camera] = useState<CameraService>(new Xiaomi70maiCameraService());
   const [isConnected, setIsConnected] = useState(false);
-
-  useEffect(() => {
-    const newCamera = useMock ? new MockCameraService() : new Xiaomi70maiCameraService();
-    setCamera(newCamera);
-    setIsConnected(false); // Reset connection state when switching
-  }, [useMock]);
 
   const connect = async () => {
     const success = await camera.connect();
     setIsConnected(success);
   };
 
+  // Monitoramento automático: verifica a câmera a cada 5s (bolinha verde/vermelha).
+  // Assim que o usuário conecta no WiFi da câmera, o app detecta sozinho.
+  useEffect(() => {
+    let cancelled = false;
+
+    const check = async () => {
+      try {
+        const ok = await camera.connect();
+        if (!cancelled) setIsConnected(ok);
+      } catch {
+        if (!cancelled) setIsConnected(false);
+      }
+    };
+
+    check();
+    const interval = setInterval(check, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [camera]);
+
   return (
-    <CameraContext.Provider value={{ camera, useMock, setUseMock, isConnected, connect }}>
+    <CameraContext.Provider value={{ camera, isConnected, connect }}>
       {children}
     </CameraContext.Provider>
   );

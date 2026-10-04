@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useCamera } from '../../context/CameraContext';
 import { videoStorageService } from '../../services/VideoStorageService';
 import { LocalVideo } from '../../types/camera';
+import { ConnectionGuide } from '../components/ConnectionGuide';
 
 export default function Main() {
   const { role } = useAuth();
@@ -88,14 +89,29 @@ export default function Main() {
           </div>
         </div>
 
+        <ConnectionGuide />
+
         <div className="w-full aspect-video bg-brand-card rounded-2xl border border-white/5 overflow-hidden relative shadow-lg mb-10 flex flex-col items-center justify-center">
-          <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg flex items-center gap-2 text-xs font-medium border border-white/10">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            AO VIVO
-          </div>
-          
-          <Camera size={40} className="text-brand-muted/30 mb-2" />
-          <p className="text-brand-muted text-sm">Pronto para gravar</p>
+          {isConnected && (
+            <div className="absolute top-3 left-3 z-10 bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg flex items-center gap-2 text-xs font-medium border border-white/10">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              AO VIVO
+            </div>
+          )}
+
+          {isConnected ? (
+            // Preview MJPEG da câmera 70mai (stream de JPEGs; funciona em <img>)
+            <img
+              src="http://192.168.0.1/cgi-bin/liveMJPEG"
+              alt="Transmissão ao vivo da câmera"
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : (
+            <>
+              <Camera size={40} className="text-brand-muted/30 mb-2" />
+              <p className="text-brand-muted text-sm">Conecte-se à câmera para visualizar</p>
+            </>
+          )}
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center mb-10">

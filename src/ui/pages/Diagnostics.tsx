@@ -91,10 +91,16 @@ export const Diagnostics = () => {
   return (
     <div className="min-h-screen bg-gray-950 text-white p-6">
       <div className="flex items-center mb-8">
-        <Link to="/test" className="mr-4 p-2 rounded-full hover:bg-gray-800 transition-colors">
+        <Link to="/camera-test" className="mr-4 p-2 rounded-full hover:bg-gray-800 transition-colors">
           <ArrowLeft className="w-6 h-6" />
         </Link>
         <h1 className="text-2xl font-bold tracking-tight">Diagnóstico Avançado</h1>
+      </div>
+
+      <div className="mb-6 p-4 bg-blue-900/20 border border-blue-700/50 rounded-lg text-sm text-blue-200/80">
+        <strong className="font-semibold">Teste do iPhone (Safari):</strong> abra esta página pelo link do
+        Vercel usando o 4G/5G, depois conecte o celular ao Wi-Fi da câmera 70mai e rode o diagnóstico
+        <em> sem recarregar a página</em>. Se os itens passarem, o Safari permite falar com a câmera em produção.
       </div>
 
       <button

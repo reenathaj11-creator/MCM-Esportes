@@ -10,6 +10,14 @@ export default function VideoDetail() {
   const navigate = useNavigate();
   const [video, setVideo] = useState<LocalVideo | null>(null);
   const [blobUrl, setBlobUrl] = useState<string>('');
+  const [shareQueued, setShareQueued] = useState(false);
+
+  const handleWhatsApp = async () => {
+    if (!video) return;
+    const result = await shareService.shareVideo(video);
+    if (result === 'queued') setShareQueued(true);
+    else setShareQueued(false);
+  };
 
   useEffect(() => {
     async function load() {
@@ -83,10 +91,16 @@ export default function VideoDetail() {
           </p>
         </div>
 
+        {shareQueued && (
+          <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-300 text-xs text-center">
+            Sem internet (Wi-Fi da câmera). O envio ficou <strong>pendente</strong> — conclua na Galeria quando voltar ao 4G/5G.
+          </div>
+        )}
+
         {/* ACTIONS */}
         <div className="grid grid-cols-2 gap-4 mt-auto">
-          <button 
-            onClick={() => shareService.shareVideo(video)}
+          <button
+            onClick={handleWhatsApp}
             className="col-span-1 bg-[#25D366] hover:bg-[#128C7E] rounded-2xl p-4 flex flex-col items-center justify-center gap-3 transition-colors text-white shadow-lg shadow-green-500/20"
           >
             <MessageCircle size={28} />

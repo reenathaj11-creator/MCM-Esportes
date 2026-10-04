@@ -17,7 +17,7 @@ interface Stats {
 
 export const AdminSettings: React.FC = () => {
   const { user, logout } = useAuth();
-  const { isConnected, useMock } = useCamera();
+  const { isConnected } = useCamera();
   const [showGrid, setShowGrid] = useState(true);
   const [stats, setStats] = useState<Stats>({
     totalUsers: null,
@@ -189,7 +189,7 @@ export const AdminSettings: React.FC = () => {
               <div className="flex justify-between items-center py-2 border-b border-neutral-800">
                 <span className="text-neutral-400">Status da câmera</span>
                 <span className={`font-medium ${isConnected ? 'text-emerald-500' : 'text-red-400'}`}>
-                  {isConnected ? `Online${useMock ? ' (simulada)' : ''}` : 'Offline'}
+                  {isConnected ? 'Online' : 'Offline'}
                 </span>
               </div>
               <div className="flex justify-between items-center py-2">

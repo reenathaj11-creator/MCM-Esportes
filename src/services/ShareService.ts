@@ -1,26 +1,40 @@
 import { LocalVideo } from '../types/camera';
 
+export type ShareResult = 'shared' | 'queued' | 'downloaded';
+
+const PENDING_KEY = 'mcm_pending_shares';
+
 class ShareService {
-  async shareVideo(video: LocalVideo): Promise<boolean> {
+  /**
+   * Compartilha o vídeo via folha de compartilhamento nativa (WhatsApp etc).
+   * Sem internet (ex: conectado no Wi-Fi da câmera), o envio entra numa fila
+   * local e pode ser concluído quando o 5G voltar.
+   */
+  async shareVideo(video: LocalVideo): Promise<ShareResult> {
+    if (!navigator.onLine) {
+      this.enqueue(video.id);
+      return 'queued';
+    }
+
     const file = new File([video.blob], video.fileName, { type: video.blob.type || 'video/mp4' });
-    
+
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({
-          title: 'AKASO Video',
-          text: 'Confira este vídeo que gravei!',
+          title: 'MCM Esportes',
+          text: 'Confira esta jogada!',
           files: [file],
         });
-        return true;
-      } catch (error) {
-        console.error('Error sharing video:', error);
-        // Fallback if sharing is cancelled or fails
+        this.removePending(video.id);
+        return 'shared';
+      } catch {
+        // Compartilhamento cancelado ou falhou — segue para o fallback
       }
     }
-    
-    // Fallback: trigger download
+
+    // Fallback: baixa o arquivo
     this.downloadVideo(video);
-    return false;
+    return 'downloaded';
   }
 
   downloadVideo(video: LocalVideo): void {
@@ -32,6 +46,29 @@ class ShareService {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  // ---------- Fila de envios pendentes (offline) ----------
+
+  getPendingShares(): string[] {
+    try {
+      return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  enqueue(videoId: string): void {
+    const pending = this.getPendingShares();
+    if (!pending.includes(videoId)) {
+      pending.push(videoId);
+      localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+    }
+  }
+
+  removePending(videoId: string): void {
+    const pending = this.getPendingShares().filter(id => id !== videoId);
+    localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
   }
 }
 
