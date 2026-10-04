@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MCM Esportes</string>
+    <string name="title_activity_main">MCM Esportes</string>
+    <string name="package_name">com.mcm.esportes</string>
+    <string name="custom_url_scheme">com.mcm.esportes</string>
+</resources>

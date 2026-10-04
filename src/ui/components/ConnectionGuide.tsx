@@ -1,10 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useCamera } from '../../context/CameraContext';
+import { Capacitor } from '@capacitor/core';
+import { NativeSettings, AndroidSettings, IOSSettings } from 'capacitor-native-settings';
 import { Wifi, CheckCircle2, Copy, Check, ChevronDown, HelpCircle } from 'lucide-react';
 
 // Dados do WiFi da câmera (ajuste conforme a etiqueta da sua unidade)
 const CAMERA_WIFI_SSID = '70mai_M310_Plus_XXXX';
 const CAMERA_WIFI_PASSWORD = '12345678';
+
+const isNativeApp = Capacitor.isNativePlatform();
+
+// Abre as configurações de Wi-Fi do sistema (dentro do APK)
+const openWifiSettings = () =>
+  NativeSettings.open({ optionAndroid: AndroidSettings.Wifi, optionIOS: IOSSettings.WiFi });
 
 const StepRow: React.FC<{
   number: number;
@@ -78,9 +86,17 @@ export const ConnectionGuide: React.FC = () => {
         <div className="px-4 pb-4 pt-1 space-y-4 border-t border-white/5">
           <StepRow number={1} done={isConnected}>
             <span className="flex items-center gap-1.5 font-medium">
-              <Wifi size={14} /> Abra os Ajustes do celular e conecte no Wi-Fi da câmera:
+              <Wifi size={14} /> Conecte no Wi-Fi da câmera:
             </span>
             <span className="block mt-1 font-mono text-brand-primary">{CAMERA_WIFI_SSID}</span>
+            {isNativeApp && (
+              <button
+                onClick={openWifiSettings}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 bg-brand-primary text-brand-bg text-xs font-bold rounded-xl not-italic"
+              >
+                <Wifi size={14} /> Abrir Wi-Fi
+              </button>
+            )}
           </StepRow>
 
           <StepRow number={2} done={isConnected}>

@@ -1,0 +1,64 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    # Chaves públicas do Supabase (anon key é projetada para ir no cliente).
+    # NÃO colocar service role key aqui.
+    env:
+      VITE_SUPABASE_URL: https://avsvckeyrtekhfdeovdl.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_qdIOnSLogq3B013qqeiULQ_ACGDeNET
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Build do web app
+        run: npm run build
+
+      - name: Sincronizar Capacitor
+        run: npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Build do APK (debug, assinado c/ chave debug)
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Salvar APK como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcm-esportes-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      # Publica/atualiza a release "latest" -> o QR Code aponta para:
+      # https://github.com/reenathaj11-creator/MCM-Esportes/releases/latest/download/app-debug.apk
+      - name: Publicar release "latest"
+        if: github.event_name == 'push'
+        uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          automatic_release_tag: latest
+          prerelease: false
+          title: MCM Esportes - APK mais recente (build automático)
+          files: android/app/build/outputs/apk/debug/app-debug.apk

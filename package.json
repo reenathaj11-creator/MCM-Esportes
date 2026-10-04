@@ -10,7 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.2",
     "@supabase/supabase-js": "^2.117.2",
+    "capacitor-native-settings": "^8.2.0",
     "idb": "^8.0.3",
     "lucide-react": "^1.51.0",
     "react": "^19.2.8",
@@ -18,6 +22,7 @@
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
