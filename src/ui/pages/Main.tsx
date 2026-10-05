@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings, Camera, Clock, ChevronRight } from 'lucide-react';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { useAuth } from '../../context/AuthContext';
 import { useCamera } from '../../context/CameraContext';
 import { videoStorageService } from '../../services/VideoStorageService';
@@ -8,19 +9,64 @@ import { LocalVideo } from '../../types/camera';
 import { ConnectionGuide } from '../components/ConnectionGuide';
 import { RefreshCw } from 'lucide-react';
 
+const LIVE_URL = 'http://192.168.0.1/cgi-bin/liveMJPEG';
+const STATIC_URL = 'http://192.168.0.1/cgi-bin/staticMJPEG';
+
 export default function Main() {
   const { role } = useAuth();
   const navigate = useNavigate();
   const { isConnected, camera } = useCamera();
   const [isCapturing, setIsCapturing] = useState(false);
   const [captureProgress, setCaptureProgress] = useState(0);
-  const [previewError, setPreviewError] = useState(false);
+  // live -> snapshot (staticMJPEG com refresh) -> error (com status HTTP real)
+  const [previewStage, setPreviewStage] = useState<'live' | 'static' | 'error'>('live');
   const [previewRetry, setPreviewRetry] = useState(0);
+  const [probeStatus, setProbeStatus] = useState('');
 
-  // Quando reconectar, limpa o estado de erro do preview (tenta de novo)
+  // Sonda os endpoints de preview e mostra o HTTP real (404/403/timeout)
+  const probePreview = async () => {
+    const out: string[] = [];
+    for (const u of [LIVE_URL, STATIC_URL]) {
+      const name = u.split('/').pop();
+      try {
+        if (Capacitor.isNativePlatform()) {
+          const r = await CapacitorHttp.get({ url: u, connectTimeout: 5000, readTimeout: 8000 });
+          const body = typeof r.data === 'string' ? r.data.slice(0, 60) : '[binário]';
+          out.push(`${name}: HTTP ${r.status} ${body}`);
+        } else {
+          const c = new AbortController();
+          const t = setTimeout(() => c.abort(), 6000);
+          const r = await fetch(u, { signal: c.signal, cache: 'no-store' });
+          clearTimeout(t);
+          out.push(`${name}: HTTP ${r.status}`);
+        }
+      } catch (e: any) {
+        out.push(`${name}: ${String(e?.message ?? e).slice(0, 80)}`);
+      }
+    }
+    setProbeStatus(out.join(' | '));
+  };
+
+  // Quando reconectar, volta a tentar o preview ao vivo
   useEffect(() => {
-    if (isConnected) setPreviewError(false);
-  }, [isConnected, previewRetry]);
+    if (isConnected) {
+      setPreviewStage('live');
+      setProbeStatus('');
+    }
+  }, [isConnected]);
+
+  // Snapshot com refresh a cada 3s enquanto estiver no estágio static
+  useEffect(() => {
+    if (previewStage !== 'static') return;
+    const id = setInterval(() => setPreviewRetry(n => n + 1), 3000);
+    return () => clearInterval(id);
+  }, [previewStage]);
+
+  const retryPreview = () => {
+    setProbeStatus('');
+    setPreviewStage('live');
+    setPreviewRetry(n => n + 1);
+  };
 
   const handleCapture = async () => {
     setIsCapturing(true);
@@ -107,21 +153,34 @@ export default function Main() {
             </div>
           )}
 
-          {isConnected && !previewError ? (
-            // Preview MJPEG da câmera 70mai (stream de JPEGs; funciona em <img>)
-            <img
-              key={previewRetry}
-              src="http://192.168.0.1/cgi-bin/liveMJPEG"
-              alt="Transmissão ao vivo da câmera"
-              className="absolute inset-0 w-full h-full object-cover"
-              onError={() => setPreviewError(true)}
-            />
+          {isConnected && previewStage !== 'error' ? (
+            // Ao vivo (stream) -> cai para snapshot com refresh -> erro com HTTP real
+            previewStage === 'live' ? (
+              <img
+                key={`live-${previewRetry}`}
+                src={LIVE_URL}
+                alt="Transmissão ao vivo da câmera"
+                className="absolute inset-0 w-full h-full object-cover"
+                onError={() => setPreviewStage('static')}
+              />
+            ) : (
+              <img
+                key={`static-${previewRetry}`}
+                src={`${STATIC_URL}?t=${previewRetry}`}
+                alt="Foto atual da câmera"
+                className="absolute inset-0 w-full h-full object-cover"
+                onError={() => { setPreviewStage('error'); probePreview(); }}
+              />
+            )
           ) : isConnected ? (
             <>
               <Camera size={40} className="text-brand-muted/30 mb-2" />
               <p className="text-brand-muted text-sm mb-3">Preview indisponível no momento</p>
+              {probeStatus && (
+                <p className="text-[11px] font-mono text-brand-muted/80 mb-3 px-4 text-center break-words">{probeStatus}</p>
+              )}
               <button
-                onClick={() => { setPreviewError(false); setPreviewRetry(n => n + 1); }}
+                onClick={retryPreview}
                 className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-brand-bg text-xs font-bold rounded-xl"
               >
                 <RefreshCw size={14} /> Tentar novamente
