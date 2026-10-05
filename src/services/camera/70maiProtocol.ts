@@ -140,6 +140,8 @@ export class Real70maiProtocol {
   //        3) UserconfirmByBanya em polling → 4) registra cliente
 
   async pair(onProgress: (message: string) => void): Promise<boolean> {
+    let bindText = '';
+    let lastConfirm = '';
     try {
       // 1) Envia seed token
       onProgress('Enviando solicitação de pareamento...');
@@ -149,7 +151,8 @@ export class Real70maiProtocol {
 
       const bindUrl = `${BASE_URL}/cgi-bin/BindByBanya.cgi?-usr=${seed}&-signkey=${this.pairKey(seed)}`;
       const { status, text } = await this.httpGetText(bindUrl);
-      if (status !== 200) throw new Error(`HTTP ${status}`);
+      bindText = text;
+      if (status !== 200) throw new Error(`HTTP ${status}: ${text.slice(0, 200)}`);
 
       const bindResp = parseCameraJson(text);
       const result = bindResp.Result as Record<string, unknown> | null;
@@ -174,8 +177,12 @@ export class Real70maiProtocol {
       for (let attempt = 0; attempt < 30; attempt++) {
         await new Promise(r => setTimeout(r, 1000));
         try {
-          const { text: confirmText } = await this.httpGetText(confirmUrl, 4000);
+          const { text: confirmText, status: confirmStatus } = await this.httpGetText(confirmUrl, 4000);
+          lastConfirm = `HTTP ${confirmStatus}: ${confirmText.slice(0, 160)}`;
           const confirmResp = parseCameraJson(confirmText);
+          if (attempt % 5 === 0 || attempt < 2) {
+            onProgress(`⚠️ Aperte o botão de confirmação da câmera agora! (${attempt + 1}s/30s) Última: ${lastConfirm}`);
+          }
           if (confirmResp.ResultCode === '0') {
             // 4) Registra o cliente com o token definitivo
             localStorage.setItem(TOKEN_STORAGE_KEY, realToken);
@@ -195,12 +202,14 @@ export class Real70maiProtocol {
             localStorage.removeItem(TOKEN_STORAGE_KEY);
             throw new Error(`Token rejeitado pela câmera. Resposta: ${JSON.stringify(check).slice(0, 200)}`);
           }
-        } catch {
+        } catch (e: any) {
+          if (e?.message?.includes('Token rejeitado')) throw e;
+          if (!lastConfirm) lastConfirm = `erro: ${String(e?.message ?? e).slice(0, 120)}`;
           // tenta de novo
         }
       }
 
-      throw new Error('Tempo esgotado aguardando a confirmação na câmera');
+      throw new Error(`Tempo esgotado aguardando a confirmação na câmera. Bind: ${bindText.slice(0, 160)} | Última confirm: ${lastConfirm || '(sem resposta)'}`);
     } catch (error: any) {
       onProgress(`❌ Falha no pareamento: ${error.message ?? error}`);
       return false;
