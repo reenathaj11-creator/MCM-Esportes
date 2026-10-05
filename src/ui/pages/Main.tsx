@@ -32,14 +32,39 @@ export default function Main() {
   // Sonda registro + álbum (com código cru) + endpoints e mostra o resultado
   const probePreview = async () => {
     const out: string[] = [];
+    // Teste de ordem: register com álbum DESLIGADO (pode ser pré-requisito)
+    try {
+      const off = await camera.setAlbumMode?.(false).catch(() => false);
+      out.push(`álbum-off: ${off ? 'ok' : 'falha'}`);
+    } catch { out.push('álbum-off: falha'); }
     if (camera.debugRegister) {
       try {
         const r = await camera.debugRegister();
-        out.push(`register: HTTP ${r.http} code ${r.code} ${r.body.slice(0, 120)}`);
+        out.push(`register (álbum off): HTTP ${r.http} code ${r.code} ${r.body.slice(0, 100)}`);
       } catch (e: any) {
-        out.push(`register: ${String(e?.message ?? e).slice(0, 80)}`);
+        out.push(`register (álbum off): ${String(e?.message ?? e).slice(0, 80)}`);
       }
     }
+    // MJPEG sem álbum e sem auth (isola cada variável)
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const r = await CapacitorHttp.get({ url: LIVE_URL, connectTimeout: 5000, readTimeout: 8000 });
+        const body = typeof r.data === 'string' ? r.data.slice(0, 60) : '[binário]';
+        out.push(`live sem-álbum: HTTP ${r.status} ${body}`);
+      } else {
+        const c = new AbortController();
+        const t = setTimeout(() => c.abort(), 6000);
+        const r = await fetch(LIVE_URL, { signal: c.signal, cache: 'no-store' });
+        clearTimeout(t);
+        out.push(`live sem-álbum: HTTP ${r.status}`);
+      }
+    } catch (e: any) {
+      out.push(`live sem-álbum: ${String(e?.message ?? e).slice(0, 80)}`);
+    }
+    try {
+      const on = await camera.setAlbumMode?.(true).catch(() => false);
+      out.push(`álbum-on: ${on ? 'ok' : 'falha'}`);
+    } catch { out.push('álbum-on: falha'); }
     if (camera.debugCommand) {
       for (const [name, cmd, params] of [
         ['álbum', 'setaccessalbum.cgi', { enable: 1 }],
