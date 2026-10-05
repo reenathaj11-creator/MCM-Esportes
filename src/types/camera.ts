@@ -53,6 +53,10 @@ export interface CameraService {
   setAlbumMode?(enable: boolean): Promise<boolean>;
   /** Re-registra o app na câmera */
   registerClient?(): Promise<boolean>;
+  /** URL de preview assinada (live/static MJPEG) */
+  previewUrl?(kind: 'live' | 'static'): string;
+  /** Comando cru para diagnóstico (HTTP + código + trecho) */
+  debugCommand?(command: string, params?: Record<string, string | number>): Promise<{ http: number; code: string; body: string }>;
   getMediaFiles(): Promise<MediaFile[]>;
   getLatestVideo(): Promise<MediaFile | null>;
   downloadVideo(file: MediaFile): Promise<Blob>;

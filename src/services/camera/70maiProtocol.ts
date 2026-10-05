@@ -97,6 +97,24 @@ export class Real70maiProtocol {
     return localStorage.getItem(TOKEN_STORAGE_KEY);
   }
 
+  /** Monta a URL assinada de um comando cardvapi (timestamp + signkey MD5) */
+  private signedUrl(command: string, params: Record<string, string | number> = {}): string {
+    const token = this.getToken();
+    if (!token) throw new Error('Câmera não pareada');
+
+    const query: Record<string, string> = {};
+    for (const [key, value] of Object.entries(params)) {
+      query['-' + key] = String(value);
+    }
+    query['-timestamp'] = String(Math.floor(Date.now() / 1000));
+
+    const paramsStr = Object.entries(query).map(([k, v]) => `${k}=${v}`).join('&');
+    query['-signkey'] = md5(`${command}?${paramsStr}${token}`);
+
+    return `${BASE_URL}/cgi-bin/${command}?` +
+      Object.entries(query).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+  }
+
   private pairKey(payload: string): string {
     return md5(payload + MAGIC_STRING);
   }
@@ -110,21 +128,7 @@ export class Real70maiProtocol {
     params: Record<string, string | number> = {},
     timeoutMs = 8000,
   ): Promise<CameraJsonResponse> {
-    const token = this.getToken();
-    if (!token) throw new Error('Câmera não pareada');
-
-    const query: Record<string, string> = {};
-    for (const [key, value] of Object.entries(params)) {
-      query['-' + key] = String(value);
-    }
-    query['-timestamp'] = String(Math.floor(Date.now() / 1000));
-
-    const paramsStr = Object.entries(query).map(([k, v]) => `${k}=${v}`).join('&');
-    query['-signkey'] = md5(`${command}?${paramsStr}${token}`);
-
-    const url = `${BASE_URL}/cgi-bin/${command}?` +
-      Object.entries(query).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
-
+    const url = this.signedUrl(command, params);
     const { text } = await this.httpGetText(url, timeoutMs);
     if (!text) throw new Error('Resposta vazia da câmera');
 
@@ -341,6 +345,39 @@ export class Real70maiProtocol {
       return resp.ResultCode === '0';
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * URL de preview (live/static MJPEG) ASSINADA com o token pareado.
+   * A M310 exige timestamp+signkey até no stream (sem isso: resultcode -4444).
+   */
+  previewUrl(kind: 'live' | 'static'): string {
+    const cmd = kind === 'live' ? 'liveMJPEG' : 'staticMJPEG';
+    try {
+      return this.signedUrl(cmd);
+    } catch {
+      return `${BASE_URL}/cgi-bin/${cmd}`;
+    }
+  }
+
+  /** Executa um comando e devolve o cru (HTTP + código + trecho) para diagnóstico em campo */
+  async debugCommand(
+    command: string,
+    params: Record<string, string | number> = {},
+  ): Promise<{ http: number; code: string; body: string }> {
+    try {
+      const url = this.signedUrl(command, params);
+      const { status, text } = await this.httpGetText(url, 8000);
+      let code = '';
+      try {
+        code = parseCameraJson(text).ResultCode || '(vazio)';
+      } catch {
+        code = '(binário/ilegível)';
+      }
+      return { http: status, code, body: text.slice(0, 120) };
+    } catch (e: any) {
+      return { http: 0, code: 'erro', body: String(e?.message ?? e).slice(0, 120) };
     }
   }
 

@@ -24,17 +24,31 @@ export default function Main() {
   const [probeStatus, setProbeStatus] = useState('');
   const [albumState, setAlbumState] = useState<'pending' | 'ok' | 'fail'>('pending');
 
-  // Sonda registro + álbum + endpoints e mostra o resultado real
+  // Sonda registro + álbum (com código cru) + endpoints e mostra o resultado
   const probePreview = async () => {
     const out: string[] = [];
-    try {
-      const reg = await camera.registerClient?.().catch(() => false);
-      out.push(`register: ${reg ? 'ok' : 'falha'}`);
-    } catch { out.push('register: falha'); }
-    try {
-      const alb = await camera.setAlbumMode?.(true).catch(() => false);
-      out.push(`álbum: ${alb ? 'ok' : 'falha'}`);
-    } catch { out.push('álbum: falha'); }
+    if (camera.debugCommand) {
+      for (const [name, cmd, params] of [
+        ['register', 'client.cgi', { operation: 'register', ip: '192.168.0.2' }],
+        ['álbum', 'setaccessalbum.cgi', { enable: 1 }],
+      ] as const) {
+        try {
+          const r = await camera.debugCommand(cmd, params as Record<string, string | number>);
+          out.push(`${name}: HTTP ${r.http} code ${r.code} ${r.body.slice(0, 80)}`);
+        } catch (e: any) {
+          out.push(`${name}: ${String(e?.message ?? e).slice(0, 80)}`);
+        }
+      }
+    } else {
+      try {
+        const reg = await camera.registerClient?.().catch(() => false);
+        out.push(`register: ${reg ? 'ok' : 'falha'}`);
+      } catch { out.push('register: falha'); }
+      try {
+        const alb = await camera.setAlbumMode?.(true).catch(() => false);
+        out.push(`álbum: ${alb ? 'ok' : 'falha'}`);
+      } catch { out.push('álbum: falha'); }
+    }
     for (const u of [LIVE_URL, STATIC_URL]) {
       const name = u.split('/').pop();
       try {
@@ -139,6 +153,11 @@ export default function Main() {
     }
   };
 
+  // URLs de preview assinadas (nova assinatura a cada render/retry/refresh)
+  const liveSrc = camera.previewUrl?.('live') ?? LIVE_URL;
+  const staticBase = camera.previewUrl?.('static') ?? STATIC_URL;
+  const staticSrc = `${staticBase}${staticBase.includes('?') ? '&' : '?'}t=${previewRetry}`;
+
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col relative">
       <div 
@@ -178,11 +197,12 @@ export default function Main() {
           )}
 
           {isConnected && albumState === 'ok' && previewStage !== 'error' ? (
-            // Ao vivo (stream) -> cai para snapshot com refresh -> erro com HTTP real
+            // URLs ASSINADAS com o token (a M310 exige timestamp+signkey no stream).
+            // previewUrl gera nova assinatura a cada render (retry/refresh).
             previewStage === 'live' ? (
               <img
                 key={`live-${previewRetry}`}
-                src={LIVE_URL}
+                src={liveSrc}
                 alt="Transmissão ao vivo da câmera"
                 className="absolute inset-0 w-full h-full object-cover"
                 onError={() => setPreviewStage('static')}
@@ -190,7 +210,7 @@ export default function Main() {
             ) : (
               <img
                 key={`static-${previewRetry}`}
-                src={`${STATIC_URL}?t=${previewRetry}`}
+                src={staticSrc}
                 alt="Foto atual da câmera"
                 className="absolute inset-0 w-full h-full object-cover"
                 onError={() => { setPreviewStage('error'); probePreview(); }}
