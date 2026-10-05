@@ -189,7 +189,7 @@ export class Real70maiProtocol {
         // Qualquer resposta HTTP (até 404/503) prova que ALGO respondeu no IP.
         // No APK o celular está no Wi-Fi da câmera: 192.168.0.1 SÓ pode ser ela,
         // inclusive sem cartão SD (quando /mnt/ pode não existir -> 404).
-        if (Capacitor.isNativePlatform() && status < 500) return true;
+        if (Capacitor.isNativePlatform() && status < 600) return true;
 
         // No navegador: valida o conteúdo para não confundir com o roteador da casa.
         if (status >= 200 && status < 400 &&

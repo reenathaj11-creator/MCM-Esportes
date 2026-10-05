@@ -29,6 +29,7 @@ export const CameraProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     let cancelled = false;
     let failures = 0;
+    let authFailures = 0;
 
     const check = async () => {
       try {
@@ -40,10 +41,9 @@ export const CameraProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         if (!reachable) {
           failures++;
-          if (failures >= 3) {
-            setIsConnected(false);
-            setNeedsPairing(false);
-          }
+          // Só derruba o estado depois de 3 falhas; o "precisa parear"
+          // anterior se mantém para não piscar na tela
+          if (failures >= 3) setIsConnected(false);
           return;
         }
 
@@ -55,15 +55,23 @@ export const CameraProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           return;
         }
 
-        setNeedsPairing(false);
         const ok = await camera.connect();
-        if (!cancelled) setIsConnected(ok);
+        if (cancelled) return;
+
+        if (ok) {
+          authFailures = 0;
+          setNeedsPairing(false);
+          setIsConnected(true);
+        } else {
+          authFailures++;
+          setIsConnected(false);
+          // Token local salvo mas a câmera rejeitou (ex.: re-pareada no app oficial)
+          // -> volta a oferecer o pareamento
+          if (authFailures >= 3) setNeedsPairing(true);
+        }
       } catch {
         failures++;
-        if (!cancelled && failures >= 3) {
-          setIsConnected(false);
-          setNeedsPairing(false);
-        }
+        if (!cancelled && failures >= 3) setIsConnected(false);
       }
     };
 
