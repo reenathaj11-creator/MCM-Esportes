@@ -142,37 +142,45 @@ export class Real70maiProtocol {
   async pair(onProgress: (message: string) => void): Promise<boolean> {
     let bindText = '';
     let lastConfirm = '';
+    const seenCodes = new Set<string>();
     try {
-      // 1) Envia seed token
+      // 1) Bind: primeiro o fluxo oficial (usr NUMÉRICO, como o app 70mai),
+      //    que devolve Token + timestamp. Se vier resposta seca, cai para seed.
       onProgress('Enviando solicitação de pareamento...');
-      const seed = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
+      const numericId = String(Math.floor(1000000 + Math.random() * 9000000));
 
-      const bindUrl = `${BASE_URL}/cgi-bin/BindByBanya.cgi?-usr=${seed}&-signkey=${this.pairKey(seed)}`;
-      const { status, text } = await this.httpGetText(bindUrl);
-      bindText = text;
-      if (status !== 200) throw new Error(`HTTP ${status}: ${text.slice(0, 200)}`);
+      const doBind = async (usr: string): Promise<{ token: string; timestamp: string }> => {
+        const url = `${BASE_URL}/cgi-bin/BindByBanya.cgi?&-usr=${usr}&-signkey=${this.pairKey(usr)}`;
+        const { status, text } = await this.httpGetText(url);
+        bindText = text;
+        if (status !== 200) throw new Error(`HTTP ${status}: ${text.slice(0, 200)}`);
+        const resp = parseCameraJson(text);
+        if (resp.ResultCode !== '0') throw new Error(`Pareamento recusado: ${text.slice(0, 200)}`);
+        const result = resp.Result as Record<string, unknown> | null;
+        return {
+          token: String(result?.Token ?? result?.token ?? ''),
+          timestamp: String(result?.timestamp ?? result?.Timestamp ?? ''),
+        };
+      };
 
-      const bindResp = parseCameraJson(text);
-      const result = bindResp.Result as Record<string, unknown> | null;
-      // Resposta pode ser JSON ("Token"/"timestamp") ou texto puro (chaves em minúsculas)
-      const tokenFromBody = String(result?.Token ?? result?.token ?? '');
-      const timestamp = String(result?.timestamp ?? result?.Timestamp ?? Date.now() / 1000 | 0);
-      if (bindResp.ResultCode !== '0') {
-        throw new Error(`Pareamento recusado: ${text.slice(0, 200)}`);
+      let bind = await doBind(numericId).catch(() => null);
+      let seed = '';
+      if (!bind || !bind.token || !bind.timestamp) {
+        // Fallback: M310 Plus com resposta "resultcode: 0" seca aceita o seed
+        seed = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+        bind = await doBind(seed);
+        if (!bind.timestamp) bind.timestamp = String(Math.floor(Date.now() / 1000));
       }
-      // M300 devolve um Token novo no corpo; a M310 Plus (resposta "resultcode: 0" seca)
-      // aceita o próprio seed como credencial.
-      const realToken = tokenFromBody || seed;
-
-      onProgress(tokenFromBody
-        ? 'Câmera respondeu com token.'
-        : 'Câmera aceitou o vínculo (sem token na resposta — usando o seed).');
+      // M300 devolve um Token novo no corpo; na resposta seca usa-se o seed.
+      const realToken = bind.token || seed;
 
       // 2/3) Aguarda confirmação física na câmera
-      onProgress('⚠️ Aperte o botão de confirmação da câmera agora! (botão lateral, pisca/apita)');
-      const confirmUrl = `${BASE_URL}/cgi-bin/UserconfirmByBanya.cgi?-timestamp=${timestamp}&-signkey=${this.pairKey(timestamp)}`;
+      onProgress(bind.token
+        ? 'Câmera respondeu com token. Aperte o botão dela agora!'
+        : 'Câmera aceitou o vínculo (sem token na resposta — usando o seed). Aperte o botão dela agora!');
+      const confirmUrl = `${BASE_URL}/cgi-bin/UserconfirmByBanya.cgi?&-timestamp=${bind.timestamp}&-signkey=${this.pairKey(bind.timestamp)}`;
 
       for (let attempt = 0; attempt < 30; attempt++) {
         await new Promise(r => setTimeout(r, 1000));
@@ -180,6 +188,7 @@ export class Real70maiProtocol {
           const { text: confirmText, status: confirmStatus } = await this.httpGetText(confirmUrl, 4000);
           lastConfirm = `HTTP ${confirmStatus}: ${confirmText.slice(0, 160)}`;
           const confirmResp = parseCameraJson(confirmText);
+          seenCodes.add(confirmResp.ResultCode || '(vazio)');
           if (attempt % 5 === 0 || attempt < 2) {
             onProgress(`⚠️ Aperte o botão de confirmação da câmera agora! (${attempt + 1}s/30s) Última: ${lastConfirm}`);
           }
@@ -209,7 +218,7 @@ export class Real70maiProtocol {
         }
       }
 
-      throw new Error(`Tempo esgotado aguardando a confirmação na câmera. Bind: ${bindText.slice(0, 160)} | Última confirm: ${lastConfirm || '(sem resposta)'}`);
+      throw new Error(`Tempo esgotado aguardando a confirmação na câmera. Bind: ${bindText.slice(0, 200)} | Códigos vistos: ${[...seenCodes].join(', ') || '(nenhum)'} | Última confirm: ${lastConfirm || '(sem resposta)'}`);
     } catch (error: any) {
       onProgress(`❌ Falha no pareamento: ${error.message ?? error}`);
       return false;
