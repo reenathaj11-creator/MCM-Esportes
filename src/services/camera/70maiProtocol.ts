@@ -13,7 +13,41 @@ import { md5 } from '../../utils/md5';
 
 const MAGIC_STRING = '73VpsAfdety8FDd0';
 const TOKEN_STORAGE_KEY = 'mcm_70mai_token';
+const CLIENT_IP_KEY = 'mcm_70mai_client_ip';
 const BASE_URL = 'http://192.168.0.1';
+
+/** IPs prováveis do celular na rede da câmera (o .2 é o mais comum) */
+const IP_CANDIDATES = [
+  '192.168.0.2', '192.168.0.3', '192.168.0.4',
+  '192.168.0.5', '192.168.0.10', '192.168.0.20',
+];
+
+/** Descobre IPs locais via WebRTC (sem permissão; pode vir mascarado em alguns Chromes) */
+function detectLocalIps(timeoutMs = 2500): Promise<string[]> {
+  return new Promise(resolve => {
+    const found = new Set<string>();
+    try {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      pc.createDataChannel('x');
+      const timer = setTimeout(() => { try { pc.close(); } catch { /* ignore */ } resolve([...found]); }, timeoutMs);
+      pc.onicecandidate = e => {
+        if (!e.candidate) {
+          clearTimeout(timer);
+          try { pc.close(); } catch { /* ignore */ }
+          resolve([...found]);
+          return;
+        }
+        const m = /(\d{1,3}(?:\.\d{1,3}){3})/.exec(e.candidate.candidate);
+        if (m && m[1] !== '127.0.0.1' && !m[1].startsWith('0.')) found.add(m[1]);
+      };
+      pc.createOffer()
+        .then(o => pc.setLocalDescription(o))
+        .catch(() => { clearTimeout(timer); resolve([...found]); });
+    } catch {
+      resolve([...found]);
+    }
+  });
+}
 
 interface CameraJsonResponse {
   ResultCode: string;
@@ -341,11 +375,38 @@ export class Real70maiProtocol {
   /** Avisa a câmera que um app está conectado (o app oficial envia a cada poucos segundos) */
   async registerClient(): Promise<boolean> {
     try {
-      const resp = await this.command('client.cgi', { operation: 'register', ip: '192.168.0.2' });
-      return resp.ResultCode === '0';
+      return (await this.debugRegister()).code === '0';
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Registra testando o IP real do celular: a câmera parece validar o IP
+   * de origem (register com IP errado devolve -5555). Tenta o IP em cache,
+   * o detectado via WebRTC e candidatos comuns; guarda o que funcionar.
+   */
+  async debugRegister(): Promise<{ http: number; code: string; body: string }> {
+    const tried: string[] = [];
+    const cached = localStorage.getItem(CLIENT_IP_KEY);
+    const rtcIps = await detectLocalIps().catch(() => [] as string[]);
+    const queue = [
+      ...new Set([
+        ...(cached ? [cached] : []),
+        ...rtcIps.filter(ip => ip.startsWith('192.168.0.')),
+        ...IP_CANDIDATES,
+      ]),
+    ].slice(0, 8);
+    let last: { http: number; code: string; body: string } = { http: 0, code: 'erro', body: 'sem resposta' };
+    for (const ip of queue) {
+      tried.push(ip);
+      last = await this.debugCommand('client.cgi', { operation: 'register', ip });
+      if (last.code === '0') {
+        localStorage.setItem(CLIENT_IP_KEY, ip);
+        return { http: last.http, code: last.code, body: `ip=${ip} ok (ordem: ${tried.join(',')})` };
+      }
+    }
+    return { http: last.http, code: last.code, body: `falhou em ${tried.join(',')} | última: ${last.body}` };
   }
 
   /**

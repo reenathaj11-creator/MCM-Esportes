@@ -53,6 +53,8 @@ export interface CameraService {
   setAlbumMode?(enable: boolean): Promise<boolean>;
   /** Re-registra o app na câmera */
   registerClient?(): Promise<boolean>;
+  /** Registra testando IPs candidatos; devolve o cru (para diagnóstico) */
+  debugRegister?(): Promise<{ http: number; code: string; body: string }>;
   /** URL de preview assinada (live/static MJPEG) */
   previewUrl?(kind: 'live' | 'static'): string;
   /** Comando cru para diagnóstico (HTTP + código + trecho) */

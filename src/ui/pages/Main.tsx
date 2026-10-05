@@ -27,9 +27,16 @@ export default function Main() {
   // Sonda registro + álbum (com código cru) + endpoints e mostra o resultado
   const probePreview = async () => {
     const out: string[] = [];
+    if (camera.debugRegister) {
+      try {
+        const r = await camera.debugRegister();
+        out.push(`register: HTTP ${r.http} code ${r.code} ${r.body.slice(0, 120)}`);
+      } catch (e: any) {
+        out.push(`register: ${String(e?.message ?? e).slice(0, 80)}`);
+      }
+    }
     if (camera.debugCommand) {
       for (const [name, cmd, params] of [
-        ['register', 'client.cgi', { operation: 'register', ip: '192.168.0.2' }],
         ['álbum', 'setaccessalbum.cgi', { enable: 1 }],
       ] as const) {
         try {
@@ -74,6 +81,8 @@ export default function Main() {
     setProbeStatus('');
     setAlbumState('pending');
     setPreviewStage('live');
+    // Ordem: garante álbum DESLIGADO, registra (com o IP certo), depois liga o álbum
+    try { await camera.setAlbumMode?.(false).catch(() => false); } catch { /* best-effort */ }
     try { await camera.registerClient?.(); } catch { /* best-effort */ }
     const ok = await camera.setAlbumMode?.(true).catch(() => false);
     setAlbumState(ok ? 'ok' : 'fail');

@@ -95,6 +95,11 @@ export class Xiaomi70maiCameraService implements CameraService {
     return this.protocol.registerClient();
   }
 
+  /** Registra testando IPs candidatos; devolve o cru (para diagnóstico) */
+  async debugRegister(): Promise<{ http: number; code: string; body: string }> {
+    return this.protocol.debugRegister();
+  }
+
   /** URL de preview assinada (live/static MJPEG) */
   previewUrl(kind: 'live' | 'static'): string {
     return this.protocol.previewUrl(kind);
