@@ -182,14 +182,25 @@ export class Real70maiProtocol {
 
   /** Alcançabilidade de rede (sem auth): útil para saber que estamos no Wi-Fi certo */
   async handshake(): Promise<boolean> {
-    try {
-      const { status, text } = await this.httpGetText(`${BASE_URL}/mnt/`, 3000);
-      if (status < 200 || status >= 400) return false;
-      if (Capacitor.isNativePlatform()) return true; // nessa rede, o 192.168.0.1 SÓ é a câmera
-      return /sd card|sdcard|mnt\/sd|Normal|Index of|MP4|href/i.test(text);
-    } catch {
-      return false;
+    for (const path of ['/', '/mnt/']) {
+      try {
+        const { status, text } = await this.httpGetText(`${BASE_URL}${path}`, 3000);
+
+        // Qualquer resposta HTTP (até 404/503) prova que ALGO respondeu no IP.
+        // No APK o celular está no Wi-Fi da câmera: 192.168.0.1 SÓ pode ser ela,
+        // inclusive sem cartão SD (quando /mnt/ pode não existir -> 404).
+        if (Capacitor.isNativePlatform() && status < 500) return true;
+
+        // No navegador: valida o conteúdo para não confundir com o roteador da casa.
+        if (status >= 200 && status < 400 &&
+            /sd card|sdcard|mnt|Normal|Index of|MP4|href|cgi-bin/i.test(text)) {
+          return true;
+        }
+      } catch {
+        // tenta o próximo caminho
+      }
     }
+    return false;
   }
 
   /** Autenticado + respondendo (app funcional) */
