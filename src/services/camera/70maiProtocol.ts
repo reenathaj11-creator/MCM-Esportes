@@ -20,6 +20,28 @@ interface CameraJsonResponse {
   Result?: Record<string, unknown> | unknown[] | null;
 }
 
+/**
+ * Normaliza a resposta da câmera:
+ * - ResultCode pode vir como número (0) ou texto ("0") dependendo do firmware
+ * - Result às vezes vem como string JSON (serializada duas vezes)
+ */
+function parseCameraJson(text: string): CameraJsonResponse {
+  const fixed = text.replace(/,\s*\]\}/, ']}'); // bug de vírgula do getfilecount.cgi
+  const parsed = JSON.parse(fixed);
+
+  const resultCode = String(parsed?.ResultCode ?? '');
+  let result = parsed?.Result ?? null;
+  if (typeof result === 'string') {
+    try {
+      result = JSON.parse(result);
+    } catch {
+      // mantém como string
+    }
+  }
+
+  return { ResultCode: resultCode, Result: result };
+}
+
 export class Real70maiProtocol {
   // ---------- HTTP ----------
 
@@ -95,11 +117,8 @@ export class Real70maiProtocol {
     const { text } = await this.httpGetText(url, timeoutMs);
     if (!text) throw new Error('Resposta vazia da câmera');
 
-    // getfilecount.cgi às vezes vem com vírgula sobrando no final (bug do firmware)
-    const fixed = text.replace(/,\s*\]\}/, ']}');
-
     try {
-      return JSON.parse(fixed) as CameraJsonResponse;
+      return parseCameraJson(text);
     } catch {
       throw new Error(`Resposta inválida da câmera: ${text.slice(0, 120)}`);
     }
@@ -121,10 +140,10 @@ export class Real70maiProtocol {
       const { status, text } = await this.httpGetText(bindUrl);
       if (status !== 200) throw new Error(`HTTP ${status}`);
 
-      const bindResp = JSON.parse(text);
-      const result = bindResp?.Result;
-      if (bindResp?.ResultCode !== '0' || !result?.Token || !result?.timestamp) {
-        throw new Error(`Pareamento recusado: ${text.slice(0, 80)}`);
+      const bindResp = parseCameraJson(text);
+      const result = bindResp.Result as any;
+      if (bindResp.ResultCode !== '0' || !result?.Token || !result?.timestamp) {
+        throw new Error(`Pareamento recusado: ${text.slice(0, 200)}`);
       }
 
       const realToken: string = result.Token;
@@ -138,8 +157,8 @@ export class Real70maiProtocol {
         await new Promise(r => setTimeout(r, 1000));
         try {
           const { text: confirmText } = await this.httpGetText(confirmUrl, 4000);
-          const confirmResp = JSON.parse(confirmText);
-          if (confirmResp?.ResultCode === '0') {
+          const confirmResp = parseCameraJson(confirmText);
+          if (confirmResp.ResultCode === '0') {
             // 4) Registra o cliente com o token definitivo
             localStorage.setItem(TOKEN_STORAGE_KEY, realToken);
             onProgress('Confirmado! Registrando app...');
