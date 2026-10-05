@@ -49,6 +49,8 @@ export interface CameraService {
   getStatus(): Promise<CameraStatus>;
   startRecording(): Promise<boolean>;
   stopRecording(): Promise<boolean>;
+  /** Liga/desliga o modo álbum (70mai exige para preview/download) */
+  setAlbumMode?(enable: boolean): Promise<boolean>;
   getMediaFiles(): Promise<MediaFile[]>;
   getLatestVideo(): Promise<MediaFile | null>;
   downloadVideo(file: MediaFile): Promise<Blob>;

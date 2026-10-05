@@ -47,13 +47,19 @@ export default function Main() {
     setProbeStatus(out.join(' | '));
   };
 
-  // Quando reconectar, volta a tentar o preview ao vivo
+  // Quando conectar, liga o modo álbum (pausa o loop e libera preview/
+  // download — sem ele a 70mai responde -4444) e tenta o preview ao vivo.
+  // Ao sair da tela, desliga para a câmera voltar a gravar em loop.
   useEffect(() => {
-    if (isConnected) {
-      setPreviewStage('live');
-      setProbeStatus('');
-    }
-  }, [isConnected]);
+    if (!isConnected) return;
+    setPreviewStage('live');
+    setProbeStatus('');
+    camera.setAlbumMode?.(true).catch(() => {});
+  }, [isConnected, camera]);
+
+  useEffect(() => () => {
+    camera.setAlbumMode?.(false).catch(() => {});
+  }, [camera]);
 
   // Snapshot com refresh a cada 3s enquanto estiver no estágio static
   useEffect(() => {

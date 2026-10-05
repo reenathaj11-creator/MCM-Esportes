@@ -85,6 +85,11 @@ export class Xiaomi70maiCameraService implements CameraService {
     return this.protocol.setRecording(false);
   }
 
+  /** Liga/desliga o modo álbum (necessário para preview e download) */
+  async setAlbumMode(enable: boolean): Promise<boolean> {
+    return this.protocol.setAlbumMode(enable);
+  }
+
   // ----- Arquivos -----
 
   private toMediaFile(entry: { path: string; name: string; size: number }): MediaFile {

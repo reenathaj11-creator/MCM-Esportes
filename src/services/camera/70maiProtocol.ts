@@ -337,6 +337,15 @@ export class Real70maiProtocol {
   // ---------- Controle ----------
 
   async setRecording(enable: boolean): Promise<boolean> {
+    return this.setAlbumMode(enable);
+  }
+
+  /**
+   * Modo álbum da 70mai (setaccessalbum.cgi): pausa a gravação em loop e
+   * libera preview MJPEG + listagem/download. Exigido antes do liveMJPEG
+   * (sem ele a câmera responde resultcode -4444).
+   */
+  async setAlbumMode(enable: boolean): Promise<boolean> {
     try {
       const resp = await this.command('setaccessalbum.cgi', { enable: enable ? 1 : 0 });
       return resp.ResultCode === '0';
