@@ -196,9 +196,7 @@ export class Real70maiProtocol {
             // 4) Registra o cliente com o token definitivo
             localStorage.setItem(TOKEN_STORAGE_KEY, realToken);
             onProgress('Confirmado! Registrando app...');
-            try {
-              await this.command('client.cgi', { operation: 'register', ip: '192.168.0.2' });
-            } catch { /* registro é best-effort */ }
+            await this.registerClient(); // best-effort
 
             // 5) Validação real: um comando autenticado tem que funcionar
             onProgress('Validando acesso...');
@@ -334,7 +332,17 @@ export class Real70maiProtocol {
     return await response.blob();
   }
 
-  // ---------- Controle ----------
+  // ---------- Modo álbum / registro / controle ----------
+
+  /** Avisa a câmera que um app está conectado (o app oficial envia a cada poucos segundos) */
+  async registerClient(): Promise<boolean> {
+    try {
+      const resp = await this.command('client.cgi', { operation: 'register', ip: '192.168.0.2' });
+      return resp.ResultCode === '0';
+    } catch {
+      return false;
+    }
+  }
 
   async setRecording(enable: boolean): Promise<boolean> {
     return this.setAlbumMode(enable);

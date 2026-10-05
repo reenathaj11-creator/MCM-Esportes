@@ -90,6 +90,11 @@ export class Xiaomi70maiCameraService implements CameraService {
     return this.protocol.setAlbumMode(enable);
   }
 
+  /** Re-registra o app na câmera (o app oficial envia periodicamente) */
+  async registerClient(): Promise<boolean> {
+    return this.protocol.registerClient();
+  }
+
   // ----- Arquivos -----
 
   private toMediaFile(entry: { path: string; name: string; size: number }): MediaFile {

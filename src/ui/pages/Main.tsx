@@ -7,7 +7,7 @@ import { useCamera } from '../../context/CameraContext';
 import { videoStorageService } from '../../services/VideoStorageService';
 import { LocalVideo } from '../../types/camera';
 import { ConnectionGuide } from '../components/ConnectionGuide';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Loader2 } from 'lucide-react';
 
 const LIVE_URL = 'http://192.168.0.1/cgi-bin/liveMJPEG';
 const STATIC_URL = 'http://192.168.0.1/cgi-bin/staticMJPEG';
@@ -22,10 +22,19 @@ export default function Main() {
   const [previewStage, setPreviewStage] = useState<'live' | 'static' | 'error'>('live');
   const [previewRetry, setPreviewRetry] = useState(0);
   const [probeStatus, setProbeStatus] = useState('');
+  const [albumState, setAlbumState] = useState<'pending' | 'ok' | 'fail'>('pending');
 
-  // Sonda os endpoints de preview e mostra o HTTP real (404/403/timeout)
+  // Sonda registro + álbum + endpoints e mostra o resultado real
   const probePreview = async () => {
     const out: string[] = [];
+    try {
+      const reg = await camera.registerClient?.().catch(() => false);
+      out.push(`register: ${reg ? 'ok' : 'falha'}`);
+    } catch { out.push('register: falha'); }
+    try {
+      const alb = await camera.setAlbumMode?.(true).catch(() => false);
+      out.push(`álbum: ${alb ? 'ok' : 'falha'}`);
+    } catch { out.push('álbum: falha'); }
     for (const u of [LIVE_URL, STATIC_URL]) {
       const name = u.split('/').pop();
       try {
@@ -47,14 +56,24 @@ export default function Main() {
     setProbeStatus(out.join(' | '));
   };
 
-  // Quando conectar, liga o modo álbum (pausa o loop e libera preview/
-  // download — sem ele a 70mai responde -4444) e tenta o preview ao vivo.
-  // Ao sair da tela, desliga para a câmera voltar a gravar em loop.
+  const startPreview = async () => {
+    setProbeStatus('');
+    setAlbumState('pending');
+    setPreviewStage('live');
+    try { await camera.registerClient?.(); } catch { /* best-effort */ }
+    const ok = await camera.setAlbumMode?.(true).catch(() => false);
+    setAlbumState(ok ? 'ok' : 'fail');
+    if (!ok) {
+      setPreviewStage('error');
+      await probePreview();
+    }
+  };
+
+  // Quando conectar: registra o app, liga o modo álbum e SÓ DEPOIS libera
+  // o preview (antes o <img> carregava antes do comando chegar à câmera).
   useEffect(() => {
     if (!isConnected) return;
-    setPreviewStage('live');
-    setProbeStatus('');
-    camera.setAlbumMode?.(true).catch(() => {});
+    startPreview();
   }, [isConnected, camera]);
 
   useEffect(() => () => {
@@ -69,9 +88,8 @@ export default function Main() {
   }, [previewStage]);
 
   const retryPreview = () => {
-    setProbeStatus('');
-    setPreviewStage('live');
     setPreviewRetry(n => n + 1);
+    startPreview();
   };
 
   const handleCapture = async () => {
@@ -159,7 +177,7 @@ export default function Main() {
             </div>
           )}
 
-          {isConnected && previewStage !== 'error' ? (
+          {isConnected && albumState === 'ok' && previewStage !== 'error' ? (
             // Ao vivo (stream) -> cai para snapshot com refresh -> erro com HTTP real
             previewStage === 'live' ? (
               <img
@@ -178,6 +196,11 @@ export default function Main() {
                 onError={() => { setPreviewStage('error'); probePreview(); }}
               />
             )
+          ) : isConnected && albumState === 'pending' ? (
+            <>
+              <Loader2 size={40} className="text-brand-muted/30 mb-2 animate-spin" />
+              <p className="text-brand-muted text-sm">Ativando modo álbum...</p>
+            </>
           ) : isConnected ? (
             <>
               <Camera size={40} className="text-brand-muted/30 mb-2" />

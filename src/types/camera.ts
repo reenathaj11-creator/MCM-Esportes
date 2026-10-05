@@ -51,6 +51,8 @@ export interface CameraService {
   stopRecording(): Promise<boolean>;
   /** Liga/desliga o modo álbum (70mai exige para preview/download) */
   setAlbumMode?(enable: boolean): Promise<boolean>;
+  /** Re-registra o app na câmera */
+  registerClient?(): Promise<boolean>;
   getMediaFiles(): Promise<MediaFile[]>;
   getLatestVideo(): Promise<MediaFile | null>;
   downloadVideo(file: MediaFile): Promise<Blob>;
