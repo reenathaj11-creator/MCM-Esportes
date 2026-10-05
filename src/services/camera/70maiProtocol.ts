@@ -154,12 +154,18 @@ export class Real70maiProtocol {
       const bindResp = parseCameraJson(text);
       const result = bindResp.Result as Record<string, unknown> | null;
       // Resposta pode ser JSON ("Token"/"timestamp") ou texto puro (chaves em minúsculas)
-      const realToken = String(result?.Token ?? result?.token ?? '');
-      const ts = String(result?.timestamp ?? result?.Timestamp ?? '');
-      if (bindResp.ResultCode !== '0' || !realToken || !ts) {
+      const tokenFromBody = String(result?.Token ?? result?.token ?? '');
+      const timestamp = String(result?.timestamp ?? result?.Timestamp ?? Date.now() / 1000 | 0);
+      if (bindResp.ResultCode !== '0') {
         throw new Error(`Pareamento recusado: ${text.slice(0, 200)}`);
       }
-      const timestamp = ts;
+      // M300 devolve um Token novo no corpo; a M310 Plus (resposta "resultcode: 0" seca)
+      // aceita o próprio seed como credencial.
+      const realToken = tokenFromBody || seed;
+
+      onProgress(tokenFromBody
+        ? 'Câmera respondeu com token.'
+        : 'Câmera aceitou o vínculo (sem token na resposta — usando o seed).');
 
       // 2/3) Aguarda confirmação física na câmera
       onProgress('⚠️ Aperte o botão de confirmação da câmera agora! (botão lateral, pisca/apita)');
@@ -174,9 +180,20 @@ export class Real70maiProtocol {
             // 4) Registra o cliente com o token definitivo
             localStorage.setItem(TOKEN_STORAGE_KEY, realToken);
             onProgress('Confirmado! Registrando app...');
-            await this.command('client.cgi', { operation: 'register', ip: '192.168.0.2' });
-            onProgress('✅ Câmera pareada com sucesso!');
-            return true;
+            try {
+              await this.command('client.cgi', { operation: 'register', ip: '192.168.0.2' });
+            } catch { /* registro é best-effort */ }
+
+            // 5) Validação real: um comando autenticado tem que funcionar
+            onProgress('Validando acesso...');
+            const check = await this.command('getwifi.cgi', {}, 4000);
+            if (check.ResultCode === '0') {
+              onProgress('✅ Câmera pareada com sucesso!');
+              return true;
+            }
+            // Token não valeu: desfaz para permitir nova tentativa limpa
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+            throw new Error(`Token rejeitado pela câmera. Resposta: ${JSON.stringify(check).slice(0, 200)}`);
           }
         } catch {
           // tenta de novo
