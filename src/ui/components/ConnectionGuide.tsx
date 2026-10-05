@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useCamera } from '../../context/CameraContext';
 import { Capacitor } from '@capacitor/core';
 import { NativeSettings, AndroidSettings, IOSSettings } from 'capacitor-native-settings';
-import { Wifi, CheckCircle2, Copy, Check, ChevronDown, HelpCircle } from 'lucide-react';
+import { Wifi, CheckCircle2, Copy, Check, ChevronDown, HelpCircle, Link2, Loader2 } from 'lucide-react';
 
 // Dados do WiFi da câmera (ajuste conforme a etiqueta da sua unidade)
 const CAMERA_WIFI_SSID = '70mai_M310_Plus_XXXX';
@@ -36,11 +36,13 @@ const StepRow: React.FC<{
 );
 
 export const ConnectionGuide: React.FC = () => {
-  const { isConnected } = useCamera();
+  const { isConnected, needsPairing, camera } = useCamera();
   const [open, setOpen] = useState(!isConnected);
   const [copied, setCopied] = useState(false);
+  const [pairing, setPairing] = useState(false);
+  const [pairMessage, setPairMessage] = useState('');
 
-  // Expande quando desconectado e recolhe automaticamente quando conectar
+  // Expande quando não está conectado (inclui estado de pareamento pendente)
   useEffect(() => {
     setOpen(!isConnected);
   }, [isConnected]);
@@ -51,9 +53,28 @@ export const ConnectionGuide: React.FC = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // clipboard indisponível (ex: contexto não seguro) — ignora
+      // clipboard indisponível — ignora
     }
   };
+
+  const handlePair = async () => {
+    if (!camera.pair) return;
+    setPairing(true);
+    setPairMessage('Iniciando...');
+    const ok = await camera.pair(setPairMessage);
+    if (!ok) setPairing(false);
+    // sucesso: o polling automático detecta e conecta
+    setPairing(false);
+  };
+
+  const statusLabel = isConnected
+    ? 'Câmera conectada'
+    : needsPairing
+      ? 'Pareamento necessário'
+      : 'Câmera desconectada';
+
+  const dotColor = isConnected ? 'bg-green-500' : needsPairing ? 'bg-amber-400' : 'bg-red-500';
+  const textColor = isConnected ? 'text-green-400' : needsPairing ? 'text-amber-400' : 'text-red-400';
 
   return (
     <div className="w-full bg-brand-card border border-white/5 rounded-2xl overflow-hidden mb-6">
@@ -66,17 +87,14 @@ export const ConnectionGuide: React.FC = () => {
           <span className="text-sm font-semibold text-white">Guia de conexão</span>
         </div>
         <div className="flex items-center gap-3">
-          {/* Bolinha de status */}
           <span className="flex items-center gap-1.5">
-            <span className={`relative flex w-3 h-3`}>
+            <span className="relative flex w-3 h-3">
               {!isConnected && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-60" />
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-60 ${dotColor}`} />
               )}
-              <span className={`relative inline-flex rounded-full w-3 h-3 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className={`relative inline-flex rounded-full w-3 h-3 ${dotColor}`} />
             </span>
-            <span className={`text-xs font-medium ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
-              {isConnected ? 'Câmera conectada' : 'Câmera desconectada'}
-            </span>
+            <span className={`text-xs font-medium ${textColor}`}>{statusLabel}</span>
           </span>
           <ChevronDown size={18} className={`text-brand-muted transition-transform ${open ? 'rotate-180' : ''}`} />
         </div>
@@ -84,22 +102,22 @@ export const ConnectionGuide: React.FC = () => {
 
       {open && (
         <div className="px-4 pb-4 pt-1 space-y-4 border-t border-white/5">
-          <StepRow number={1} done={isConnected}>
+          <StepRow number={1} done={isConnected || needsPairing}>
             <span className="flex items-center gap-1.5 font-medium">
               <Wifi size={14} /> Conecte no Wi-Fi da câmera:
             </span>
             <span className="block mt-1 font-mono text-brand-primary">{CAMERA_WIFI_SSID}</span>
-            {isNativeApp && (
+            {isNativeApp && !isConnected && !needsPairing && (
               <button
                 onClick={openWifiSettings}
-                className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 bg-brand-primary text-brand-bg text-xs font-bold rounded-xl not-italic"
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 bg-brand-primary text-brand-bg text-xs font-bold rounded-xl"
               >
                 <Wifi size={14} /> Abrir Wi-Fi
               </button>
             )}
           </StepRow>
 
-          <StepRow number={2} done={isConnected}>
+          <StepRow number={2} done={isConnected || needsPairing}>
             Use a senha:{' '}
             <button
               onClick={copyPassword}
@@ -110,10 +128,34 @@ export const ConnectionGuide: React.FC = () => {
             </button>
           </StepRow>
 
+          {/* Pareamento: só na primeira vez em cada app/câmera */}
+          {needsPairing && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
+              <p className="text-xs text-amber-300 leading-relaxed">
+                <strong>Primeiro acesso:</strong> a câmera precisa autorizar este app.
+                Toque em Parear e em seguida <strong>aperte o botão de confirmação da câmera</strong>
+                (ela pisca/apita pedindo confirmação).
+              </p>
+              <button
+                onClick={handlePair}
+                disabled={pairing}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-neutral-900 text-sm font-bold rounded-xl transition-colors"
+              >
+                {pairing ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+                {pairing ? 'Pareando...' : 'Parear câmera'}
+              </button>
+              {pairMessage && (
+                <p className="text-[11px] font-mono text-amber-200/80 break-words">{pairMessage}</p>
+              )}
+            </div>
+          )}
+
           <StepRow number={3} done={isConnected}>
             {isConnected
               ? 'Câmera detectada! Você já pode capturar jogadas.'
-              : 'Aguarde a bolinha ficar verde — o app detecta a câmera sozinho.'}
+              : needsPairing
+                ? 'Após confirmar na câmera, a bolinha fica verde automaticamente.'
+                : 'Aguarde a bolinha ficar verde — o app detecta a câmera sozinho.'}
           </StepRow>
         </div>
       )}

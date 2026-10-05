@@ -53,6 +53,19 @@ export interface CameraService {
   getLatestVideo(): Promise<MediaFile | null>;
   downloadVideo(file: MediaFile): Promise<Blob>;
   deleteVideo(file: MediaFile): Promise<boolean>;
+
+  /** true quando a rede da câmera é alcançável mas o app ainda não foi pareado */
+  isReachable?(): Promise<boolean>;
+  /** true quando existe token pareado salvo */
+  isPaired?(): boolean;
+  /** Executa o fluxo de pareamento (câmera exige confirmação física no botão lateral) */
+  pair?(onProgress: (message: string) => void): Promise<boolean>;
+  /** Remove o token pareado (nova pareação ao resetar a câmera) */
+  unpair?(): void;
+  /** Exporta o token pareado (compartilhar com outro aparelho autorizado) */
+  exportToken?(): string | null;
+  /** Importa um token existente. Retorna false se o formato for inválido */
+  importToken?(token: string): boolean;
 }
 
 export interface ConnectionDiagnosticsResult {

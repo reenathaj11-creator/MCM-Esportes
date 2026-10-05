@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useCamera } from '../../context/CameraContext';
 import { supabase } from '../../lib/supabase';
 import { videoStorageService } from '../../services/VideoStorageService';
-import { Settings, Users, Video, Activity, ArrowLeft } from 'lucide-react';
+import { Settings, Users, Video, Activity, ArrowLeft, KeyRound, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface Stats {
@@ -17,8 +17,33 @@ interface Stats {
 
 export const AdminSettings: React.FC = () => {
   const { user, logout } = useAuth();
-  const { isConnected } = useCamera();
+  const { isConnected, camera } = useCamera();
   const [showGrid, setShowGrid] = useState(true);
+  const [showToken, setShowToken] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState(false);
+  const [tokenInput, setTokenInput] = useState('');
+  const [tokenMsg, setTokenMsg] = useState('');
+
+  const pairedToken = camera.exportToken?.() ?? null;
+
+  const copyToken = async () => {
+    if (!pairedToken) return;
+    try {
+      await navigator.clipboard.writeText(pairedToken);
+      setTokenCopied(true);
+      setTimeout(() => setTokenCopied(false), 2000);
+    } catch { /* clipboard indisponível */ }
+  };
+
+  const importToken = () => {
+    if (!camera.importToken) return;
+    if (camera.importToken(tokenInput)) {
+      setTokenMsg('✅ Token importado! Conecte no Wi-Fi da câmera para usar.');
+      setTokenInput('');
+    } else {
+      setTokenMsg('❌ Token inválido. Deve ter 32 caracteres hexadecimais (0-9, a-f).');
+    }
+  };
   const [stats, setStats] = useState<Stats>({
     totalUsers: null,
     newThisWeek: null,
@@ -197,6 +222,72 @@ export const AdminSettings: React.FC = () => {
                 <span className="font-medium">{fmt(stats.apiLatencyMs, 'ms')}</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Pareamento da câmera (multi-aparelho) */}
+        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-lg">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-amber-500/10 rounded-lg">
+              <KeyRound className="w-6 h-6 text-amber-500" />
+            </div>
+            <h3 className="text-lg font-semibold">Pareamento da câmera</h3>
+          </div>
+
+          <p className="text-xs text-neutral-400 mb-4 leading-relaxed">
+            A câmera mantém apenas <strong>um token</strong>. Para usar outro aparelho
+            <strong> sem apertar o botão da câmera</strong> e sem derrubar este, copie o token
+            aqui e importe no outro app. Quem tem o token acessa a câmera — compartilhe só
+            com aparelhos autorizados.
+          </p>
+
+          {/* Exportar */}
+          <div className="mb-5">
+            <p className="text-sm text-neutral-300 font-medium mb-2">
+              Token deste aparelho: {pairedToken ? '' : <span className="text-neutral-500">(não pareado)</span>}
+            </p>
+            {pairedToken && (
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 font-mono text-xs break-all">
+                  {showToken ? pairedToken : '•'.repeat(32)}
+                </code>
+                <button
+                  onClick={() => setShowToken(s => !s)}
+                  className="p-2 bg-neutral-800 rounded-lg hover:bg-neutral-700 transition"
+                  title={showToken ? 'Ocultar' : 'Mostrar'}
+                >
+                  {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+                <button
+                  onClick={copyToken}
+                  className="p-2 bg-neutral-800 rounded-lg hover:bg-neutral-700 transition"
+                  title="Copiar token"
+                >
+                  {tokenCopied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Importar */}
+          <div className="pt-4 border-t border-neutral-800">
+            <p className="text-sm text-neutral-300 font-medium mb-2">Importar token de outro aparelho:</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={tokenInput}
+                onChange={e => { setTokenInput(e.target.value); setTokenMsg(''); }}
+                placeholder="Cole o token (32 caracteres)"
+                className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 font-mono text-xs placeholder-neutral-600 focus:ring-2 focus:ring-amber-500/50 outline-none"
+              />
+              <button
+                onClick={importToken}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-neutral-900 text-sm font-bold rounded-lg transition"
+              >
+                Salvar
+              </button>
+            </div>
+            {tokenMsg && <p className="text-xs mt-2 text-neutral-300">{tokenMsg}</p>}
           </div>
         </div>
 
