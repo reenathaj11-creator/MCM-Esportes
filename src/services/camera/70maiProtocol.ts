@@ -21,25 +21,36 @@ interface CameraJsonResponse {
 }
 
 /**
- * Normaliza a resposta da câmera:
- * - ResultCode pode vir como número (0) ou texto ("0") dependendo do firmware
- * - Result às vezes vem como string JSON (serializada duas vezes)
+ * Normaliza a resposta da câmera, aceitando os 2 formatos observados:
+ * - JSON: {"ResultCode": 0, "Result": {...}}   (interpolação varia número/texto)
+ * - Texto puro: "resultcode: 0\nToken: abc\n..." (M310 Plus)
  */
 function parseCameraJson(text: string): CameraJsonResponse {
   const fixed = text.replace(/,\s*\]\}/, ']}'); // bug de vírgula do getfilecount.cgi
-  const parsed = JSON.parse(fixed);
 
-  const resultCode = String(parsed?.ResultCode ?? '');
-  let result = parsed?.Result ?? null;
-  if (typeof result === 'string') {
-    try {
-      result = JSON.parse(result);
-    } catch {
-      // mantém como string
+  // 1) Tenta JSON
+  try {
+    const parsed = JSON.parse(fixed);
+    let result = parsed?.Result ?? null;
+    if (typeof result === 'string') {
+      try { result = JSON.parse(result); } catch { /* mantém string */ }
     }
+    return { ResultCode: String(parsed?.ResultCode ?? ''), Result: result };
+  } catch {
+    // segue para texto puro
   }
 
-  return { ResultCode: resultCode, Result: result };
+  // 2) Texto puro: linhas "chave: valor" ou "chave=valor" (case-insensitive)
+  const map: Record<string, string> = {};
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^\s*([\w.\-]+)\s*[:=]\s*(.+?)\s*$/);
+    if (m) map[m[1].toLowerCase()] = m[2];
+  }
+
+  return {
+    ResultCode: map['resultcode'] ?? map['result_code'] ?? '',
+    Result: map,
+  };
 }
 
 export class Real70maiProtocol {
@@ -141,13 +152,14 @@ export class Real70maiProtocol {
       if (status !== 200) throw new Error(`HTTP ${status}`);
 
       const bindResp = parseCameraJson(text);
-      const result = bindResp.Result as any;
-      if (bindResp.ResultCode !== '0' || !result?.Token || !result?.timestamp) {
+      const result = bindResp.Result as Record<string, unknown> | null;
+      // Resposta pode ser JSON ("Token"/"timestamp") ou texto puro (chaves em minúsculas)
+      const realToken = String(result?.Token ?? result?.token ?? '');
+      const ts = String(result?.timestamp ?? result?.Timestamp ?? '');
+      if (bindResp.ResultCode !== '0' || !realToken || !ts) {
         throw new Error(`Pareamento recusado: ${text.slice(0, 200)}`);
       }
-
-      const realToken: string = result.Token;
-      const timestamp: string = result.timestamp;
+      const timestamp = ts;
 
       // 2/3) Aguarda confirmação física na câmera
       onProgress('⚠️ Aperte o botão de confirmação da câmera agora! (botão lateral, pisca/apita)');
