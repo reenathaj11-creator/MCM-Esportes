@@ -11,6 +11,11 @@ import { RefreshCw, Loader2 } from 'lucide-react';
 
 const LIVE_URL = 'http://192.168.0.1/cgi-bin/liveMJPEG';
 const STATIC_URL = 'http://192.168.0.1/cgi-bin/staticMJPEG';
+const LIVE_CGI_URL = 'http://192.168.0.1/cgi-bin/liveMJPEG.cgi';
+const STATIC_CGI_URL = 'http://192.168.0.1/cgi-bin/staticMJPEG.cgi';
+
+type PreviewStage = 'live' | 'liveCgi' | 'static' | 'staticCgi' | 'error';
+const STAGE_ORDER: PreviewStage[] = ['live', 'liveCgi', 'static', 'staticCgi', 'error'];
 
 export default function Main() {
   const { role } = useAuth();
@@ -19,7 +24,7 @@ export default function Main() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [captureProgress, setCaptureProgress] = useState(0);
   // live -> snapshot (staticMJPEG com refresh) -> error (com status HTTP real)
-  const [previewStage, setPreviewStage] = useState<'live' | 'static' | 'error'>('live');
+  const [previewStage, setPreviewStage] = useState<PreviewStage>('live');
   const [previewRetry, setPreviewRetry] = useState(0);
   const [probeStatus, setProbeStatus] = useState('');
   const [albumState, setAlbumState] = useState<'pending' | 'ok' | 'fail'>('pending');
@@ -56,7 +61,7 @@ export default function Main() {
         out.push(`álbum: ${alb ? 'ok' : 'falha'}`);
       } catch { out.push('álbum: falha'); }
     }
-    for (const u of [LIVE_URL, STATIC_URL]) {
+    for (const u of [LIVE_URL, LIVE_CGI_URL, STATIC_URL, STATIC_CGI_URL]) {
       const name = u.split('/').pop();
       try {
         if (Capacitor.isNativePlatform()) {
@@ -103,9 +108,9 @@ export default function Main() {
     camera.setAlbumMode?.(false).catch(() => {});
   }, [camera]);
 
-  // Snapshot com refresh a cada 3s enquanto estiver no estágio static
+  // Snapshot com refresh a cada 3s enquanto estiver num estágio static
   useEffect(() => {
-    if (previewStage !== 'static') return;
+    if (previewStage !== 'static' && previewStage !== 'staticCgi') return;
     const id = setInterval(() => setPreviewRetry(n => n + 1), 3000);
     return () => clearInterval(id);
   }, [previewStage]);
@@ -163,9 +168,23 @@ export default function Main() {
   };
 
   // URLs de preview assinadas (nova assinatura a cada render/retry/refresh)
+  const withSalt = (base: string) => `${base}${base.includes('?') ? '&' : '?'}t=${previewRetry}`;
   const liveSrc = camera.previewUrl?.('live') ?? LIVE_URL;
-  const staticBase = camera.previewUrl?.('static') ?? STATIC_URL;
-  const staticSrc = `${staticBase}${staticBase.includes('?') ? '&' : '?'}t=${previewRetry}`;
+  const liveCgiSrc = camera.previewUrl?.('live-cgi') ?? LIVE_CGI_URL;
+  const staticSrc = withSalt(camera.previewUrl?.('static') ?? STATIC_URL);
+  const staticCgiSrc = withSalt(camera.previewUrl?.('static-cgi') ?? STATIC_CGI_URL);
+  const stageSrc =
+    previewStage === 'live' ? liveSrc
+    : previewStage === 'liveCgi' ? liveCgiSrc
+    : previewStage === 'static' ? staticSrc
+    : staticCgiSrc;
+
+  // Avança live -> liveCgi -> static -> staticCgi -> error (com diagnóstico)
+  const advanceStage = () => {
+    const next = STAGE_ORDER[Math.min(STAGE_ORDER.indexOf(previewStage) + 1, STAGE_ORDER.length - 1)];
+    if (next === 'error') probePreview();
+    setPreviewStage(next);
+  };
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col relative">
@@ -206,25 +225,13 @@ export default function Main() {
           )}
 
           {isConnected && albumState === 'ok' && previewStage !== 'error' ? (
-            // URLs ASSINADAS com o token (a M310 exige timestamp+signkey no stream).
-            // previewUrl gera nova assinatura a cada render (retry/refresh).
-            previewStage === 'live' ? (
-              <img
-                key={`live-${previewRetry}`}
-                src={liveSrc}
-                alt="Transmissão ao vivo da câmera"
-                className="absolute inset-0 w-full h-full object-cover"
-                onError={() => setPreviewStage('static')}
-              />
-            ) : (
-              <img
-                key={`static-${previewRetry}`}
-                src={staticSrc}
-                alt="Foto atual da câmera"
-                className="absolute inset-0 w-full h-full object-cover"
-                onError={() => { setPreviewStage('error'); probePreview(); }}
-              />
-            )
+            <img
+              key={`${previewStage}-${previewRetry}`}
+              src={stageSrc}
+              alt="Transmissão da câmera"
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={advanceStage}
+            />
           ) : isConnected && albumState === 'pending' ? (
             <>
               <Loader2 size={40} className="text-brand-muted/30 mb-2 animate-spin" />

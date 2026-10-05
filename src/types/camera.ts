@@ -56,7 +56,7 @@ export interface CameraService {
   /** Registra testando IPs candidatos; devolve o cru (para diagnóstico) */
   debugRegister?(): Promise<{ http: number; code: string; body: string }>;
   /** URL de preview assinada (live/static MJPEG) */
-  previewUrl?(kind: 'live' | 'static'): string;
+  previewUrl?(kind: 'live' | 'static' | 'live-cgi' | 'static-cgi'): string;
   /** Comando cru para diagnóstico (HTTP + código + trecho) */
   debugCommand?(command: string, params?: Record<string, string | number>): Promise<{ http: number; code: string; body: string }>;
   getMediaFiles(): Promise<MediaFile[]>;

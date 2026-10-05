@@ -101,7 +101,7 @@ export class Xiaomi70maiCameraService implements CameraService {
   }
 
   /** URL de preview assinada (live/static MJPEG) */
-  previewUrl(kind: 'live' | 'static'): string {
+  previewUrl(kind: 'live' | 'static' | 'live-cgi' | 'static-cgi'): string {
     return this.protocol.previewUrl(kind);
   }
 

@@ -413,8 +413,12 @@ export class Real70maiProtocol {
    * URL de preview (live/static MJPEG) ASSINADA com o token pareado.
    * A M310 exige timestamp+signkey até no stream (sem isso: resultcode -4444).
    */
-  previewUrl(kind: 'live' | 'static'): string {
-    const cmd = kind === 'live' ? 'liveMJPEG' : 'staticMJPEG';
+  previewUrl(kind: 'live' | 'static' | 'live-cgi' | 'static-cgi'): string {
+    const cmd =
+      kind === 'live' ? 'liveMJPEG'
+      : kind === 'static' ? 'staticMJPEG'
+      : kind === 'live-cgi' ? 'liveMJPEG.cgi'
+      : 'staticMJPEG.cgi';
     try {
       return this.signedUrl(cmd);
     } catch {
