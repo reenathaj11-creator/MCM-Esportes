@@ -1,7 +1,25 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Copy, Check, Loader2, FlaskConical, Camera } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Loader2, FlaskConical, Camera, Radio } from 'lucide-react';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { useCamera } from '../../context/CameraContext';
+
+interface RtspProbe {
+  describe(opts: { url: string }): Promise<{ ok: boolean; status: number; detail: string }>;
+}
+
+const RtspProbePlugin = registerPlugin<RtspProbe>('RtspProbe');
+
+const RTSP_PATHS = [
+  'livestream/12',
+  'livestream/13',
+  'livestream/11',
+  'liveRTSP/av1',
+  'liveRTSP/av2',
+  'liveRTSP/av4',
+  'liveRTSP/av5',
+  'liveRTSP/v1',
+];
 
 interface Trial {
   key: string;
@@ -46,6 +64,27 @@ export const PreviewLab = () => {
     setPhotoSrc(camera.signedCommandUrl('photo.cgi'));
   };
 
+  const runRtspSweep = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      setResult({ label: 'RTSP sweep', http: 0, text: 'Só funciona no APK (plugin nativo).' });
+      return;
+    }
+    setRunning('rtsp');
+    setResult(null);
+    const lines: string[] = [];
+    for (const p of RTSP_PATHS) {
+      try {
+        const r = await RtspProbePlugin.describe({ url: `rtsp://192.168.0.1:554/${p}` });
+        const first = r.detail.split('\n')[0] ?? '';
+        lines.push(`${p}: ${r.status} ${first} ${r.ok ? '✅' : ''}`);
+      } catch (e: any) {
+        lines.push(`${p}: erro ${String(e?.message ?? e).slice(0, 80)}`);
+      }
+    }
+    setResult({ label: 'RTSP sweep', http: 200, text: lines.join('\n') });
+    setRunning(null);
+  };
+
   const copyResult = async () => {
     if (!result) return;
     try {
@@ -87,6 +126,14 @@ export const PreviewLab = () => {
           className="py-3 px-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-sm font-bold flex items-center justify-center gap-2 col-span-2"
         >
           <Camera className="w-4 h-4" /> Testar foto (photo.cgi como imagem)
+        </button>
+        <button
+          onClick={runRtspSweep}
+          disabled={running !== null}
+          className="py-3 px-2 bg-emerald-700 hover:bg-emerald-600 rounded-xl text-sm font-bold flex items-center justify-center gap-2 col-span-2 disabled:opacity-50"
+        >
+          {running === 'rtsp' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />}
+          Varredura RTSP (8 paths)
         </button>
       </div>
 
