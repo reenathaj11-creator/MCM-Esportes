@@ -177,15 +177,20 @@ export class Real70maiProtocol {
   // Fluxo: 1) BindByBanya com seed → 2) usuário aperta o botão da câmera
   //        3) UserconfirmByBanya em polling → 4) registra cliente
 
-  async pair(onProgress: (message: string) => void): Promise<boolean> {
+  async pair(onProgress: (message: string) => void, accountId?: string): Promise<boolean> {
     let bindText = '';
     let lastConfirm = '';
     const seenCodes = new Set<string>();
     try {
       // 1) Bind: primeiro o fluxo oficial (usr NUMÉRICO, como o app 70mai),
       //    que devolve Token + timestamp. Se vier resposta seca, cai para seed.
+      //    Com o ID real da conta 70mai, o token sai com licença de stream.
       onProgress('Enviando solicitação de pareamento...');
-      const numericId = String(Math.floor(1000000 + Math.random() * 9000000));
+      const cleanId = (accountId ?? '').trim();
+      const numericId = /^\d+$/.test(cleanId)
+        ? cleanId
+        : String(Math.floor(1000000 + Math.random() * 9000000));
+      if (/^\d+$/.test(cleanId)) onProgress('Usando ID da sua conta 70mai...');
 
       const doBind = async (usr: string): Promise<{ token: string; timestamp: string }> => {
         const url = `${BASE_URL}/cgi-bin/BindByBanya.cgi?&-usr=${usr}&-signkey=${this.pairKey(usr)}`;

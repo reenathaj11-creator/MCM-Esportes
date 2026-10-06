@@ -72,8 +72,9 @@ export interface CameraService {
   isReachable?(): Promise<boolean>;
   /** true quando existe token pareado salvo */
   isPaired?(): boolean;
-  /** Executa o fluxo de pareamento (câmera exige confirmação física no botão lateral) */
-  pair?(onProgress: (message: string) => void): Promise<boolean>;
+  /** Executa o fluxo de pareamento (câmera exige confirmação física no botão lateral).
+   *  accountId: ID numérico da conta 70mai (dá token com licença de stream); vazio = ID aleatório. */
+  pair?(onProgress: (message: string) => void, accountId?: string): Promise<boolean>;
   /** Remove o token pareado (nova pareação ao resetar a câmera) */
   unpair?(): void;
   /** Exporta o token pareado (compartilhar com outro aparelho autorizado) */

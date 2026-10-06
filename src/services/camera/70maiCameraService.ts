@@ -27,8 +27,8 @@ export class Xiaomi70maiCameraService implements CameraService {
     return this.protocol.handshake();
   }
 
-  async pair(onProgress: (message: string) => void): Promise<boolean> {
-    const ok = await this.protocol.pair(onProgress);
+  async pair(onProgress: (message: string) => void, accountId?: string): Promise<boolean> {
+    const ok = await this.protocol.pair(onProgress, accountId);
     this.connected = ok;
     return ok;
   }

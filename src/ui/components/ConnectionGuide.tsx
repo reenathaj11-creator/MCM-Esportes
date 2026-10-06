@@ -41,6 +41,7 @@ export const ConnectionGuide: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [pairing, setPairing] = useState(false);
   const [pairMessage, setPairMessage] = useState('');
+  const [accountId, setAccountId] = useState('');
 
   // Expande quando não está conectado (inclui estado de pareamento pendente)
   useEffect(() => {
@@ -61,7 +62,7 @@ export const ConnectionGuide: React.FC = () => {
     if (!camera.pair) return;
     setPairing(true);
     setPairMessage('Iniciando...');
-    const ok = await camera.pair(setPairMessage);
+    const ok = await camera.pair(setPairMessage, accountId);
     if (!ok) setPairing(false);
     // sucesso: o polling automático detecta e conecta
     setPairing(false);
@@ -135,6 +136,16 @@ export const ConnectionGuide: React.FC = () => {
                 <strong>Primeiro acesso:</strong> a câmera precisa autorizar este app.
                 Toque em Parear e em seguida <strong>aperte o botão de confirmação da câmera</strong>
                 (ela pisca/apita pedindo confirmação).
+              </p>
+              <input
+                value={accountId}
+                onChange={e => setAccountId(e.target.value.replace(/\D/g, ''))}
+                inputMode="numeric"
+                placeholder="ID da conta 70mai (opcional, libera o preview)"
+                className="w-full px-3 py-2 bg-brand-bg/60 border border-white/10 rounded-xl text-xs font-mono text-white placeholder:text-brand-muted/60 outline-none focus:border-amber-500/60"
+              />
+              <p className="text-[11px] text-amber-200/70 leading-relaxed">
+                O ID está no app oficial: perfil/conta. Sem ele o preview pode ficar bloqueado.
               </p>
               <button
                 onClick={handlePair}
