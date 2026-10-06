@@ -125,6 +125,11 @@ export class Xiaomi70maiCameraService implements CameraService {
     return this.protocol.debugGet(path);
   }
 
+  /** Config.cgi no formato exato do app (snapshot, modo de preview) */
+  async configRaw(action: 'get' | 'set', prop: string, value?: string): Promise<{ http: number; text: string }> {
+    return this.protocol.configRaw(action, prop, value);
+  }
+
   // ----- Arquivos -----
 
   private toMediaFile(entry: { path: string; name: string; size: number }): MediaFile {

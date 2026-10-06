@@ -236,11 +236,9 @@ export class Real70maiProtocol {
             onProgress(`⚠️ Aperte o botão de confirmação da câmera agora! (${attempt + 1}s/30s) Última: ${lastConfirm}`);
           }
           if (confirmResp.ResultCode === '0') {
-            // 4) Registra o cliente com o token definitivo
+            // 4) Token definitivo registrado localmente
+            // (client.cgi register é exclusivo dos modelos Hisi — no M310 não existe)
             localStorage.setItem(TOKEN_STORAGE_KEY, realToken);
-            onProgress('Confirmado! Registrando app...');
-            const reg = await this.debugRegister().catch(() => ({ http: 0, code: 'erro', body: '' }));
-            onProgress(`Confirmado! Registro: HTTP ${reg.http} code ${reg.code} ${reg.body.slice(0, 80)}`);
 
             // 5) Validação real: um comando autenticado tem que funcionar
             onProgress('Validando acesso...');
@@ -440,6 +438,21 @@ export class Real70maiProtocol {
   /** Resposta crua (até 8KB) para diagnóstico em campo */
   async debugRaw(command: string, params: Record<string, string | number> = {}): Promise<{ http: number; text: string }> {
     const url = this.signedUrl(command, params);
+    const { status, text } = await this.httpGetText(url, 15000);
+    return { http: status, text: text.slice(0, 8000) };
+  }
+
+  /** Config.cgi no formato EXATO do app oficial: sem hífens, timestamp em ms.
+   *  Ex.: configRaw('get','Camera.Preview.RTSP.av') ou configRaw('set','Video','capture').
+   *  É por aqui que saem snapshot (Video=capture) e o modo de preview (RTSP.av). */
+  async configRaw(action: 'get' | 'set', prop: string, value?: string): Promise<{ http: number; text: string }> {
+    const token = this.getToken();
+    if (!token) throw new Error('Câmera não pareada');
+    const ts = String(Date.now());
+    const kv = value === undefined ? prop : `${prop}=${value}`;
+    const base = `action=${action}&${kv}&timestamp=${ts}`;
+    const sign = md5(base + token);
+    const url = `${BASE_URL}/cgi-bin/Config.cgi?${base}&signkey=${sign}`;
     const { status, text } = await this.httpGetText(url, 15000);
     return { http: status, text: text.slice(0, 8000) };
   }

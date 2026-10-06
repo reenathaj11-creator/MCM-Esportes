@@ -65,6 +65,8 @@ export interface CameraService {
   debugRaw?(command: string, params?: Record<string, string | number>): Promise<{ http: number; text: string }>;
   /** GET livre em path da câmera — só leitura, sem auth */
   debugGet?(path: string): Promise<{ http: number; text: string }>;
+  /** Config.cgi no formato exato do app (snapshot, modo de preview) */
+  configRaw?(action: 'get' | 'set', prop: string, value?: string): Promise<{ http: number; text: string }>;
   getMediaFiles(): Promise<MediaFile[]>;
   getLatestVideo(): Promise<MediaFile | null>;
   downloadVideo(file: MediaFile): Promise<Blob>;

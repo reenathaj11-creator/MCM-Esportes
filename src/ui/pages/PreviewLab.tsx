@@ -29,6 +29,7 @@ interface Trial {
   label: string;
   cmd: string;
   params: Record<string, string | number>;
+  config?: { action: 'get' | 'set'; prop: string; value?: string };
 }
 
 const TRIALS: Trial[] = [
@@ -42,6 +43,9 @@ const TRIALS: Trial[] = [
   { key: 'par', label: 'Parâmetros', cmd: 'getparameter.cgi', params: {} },
   { key: 'photoraw', label: 'Foto (código cru)', cmd: 'photo.cgi', params: {} },
   { key: 'skc', label: 'SecretKeyConfirm', cmd: 'SecretKeyConfirm.cgi', params: {} },
+  { key: 'rtspav', label: 'RTSP.av (modo oficial)', cmd: '', params: {}, config: { action: 'get', prop: 'Camera.Preview.RTSP.av' } },
+  { key: 'mjpegst', label: 'MJPEG status', cmd: '', params: {}, config: { action: 'get', prop: 'Camera.Preview.MJPEG.status.*' } },
+  { key: 'snap', label: 'Snapshot! (Video=capture)', cmd: '', params: {}, config: { action: 'set', prop: 'Video', value: 'capture' } },
 ];
 
 export const PreviewLab = () => {
@@ -54,11 +58,12 @@ export const PreviewLab = () => {
   const [freePath, setFreePath] = useState('/');
 
   const runTrial = async (t: Trial) => {
-    if (!camera.debugRaw) return;
     setRunning(t.key);
     setResult(null);
     try {
-      const r = await camera.debugRaw(t.cmd, t.params);
+      const r = t.config && camera.configRaw
+        ? await camera.configRaw(t.config.action, t.config.prop, t.config.value)
+        : await camera.debugRaw!(t.cmd, t.params);
       setResult({ label: t.label, http: r.http, text: r.text });
     } catch (e: any) {
       setResult({ label: t.label, http: 0, text: String(e?.message ?? e) });

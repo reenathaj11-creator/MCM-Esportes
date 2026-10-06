@@ -29,22 +29,14 @@ export default function Main() {
   const [probeStatus, setProbeStatus] = useState('');
   const [albumState, setAlbumState] = useState<'pending' | 'ok' | 'fail'>('pending');
 
-  // Sonda registro + álbum (com código cru) + endpoints e mostra o resultado
+  // Sonda álbum + endpoints e mostra o resultado (register é só Hisi — removido)
   const probePreview = async () => {
     const out: string[] = [];
-    // Teste de ordem: register com álbum DESLIGADO (pode ser pré-requisito)
+    // Teste de ordem: MJPEG com álbum DESLIGADO
     try {
       const off = await camera.setAlbumMode?.(false).catch(() => false);
       out.push(`álbum-off: ${off ? 'ok' : 'falha'}`);
     } catch { out.push('álbum-off: falha'); }
-    if (camera.debugRegister) {
-      try {
-        const r = await camera.debugRegister();
-        out.push(`register (álbum off): HTTP ${r.http} code ${r.code} ${r.body.slice(0, 100)}`);
-      } catch (e: any) {
-        out.push(`register (álbum off): ${String(e?.message ?? e).slice(0, 80)}`);
-      }
-    }
     // MJPEG sem álbum e sem auth (isola cada variável)
     try {
       if (Capacitor.isNativePlatform()) {
@@ -111,9 +103,8 @@ export default function Main() {
     setProbeStatus('');
     setAlbumState('pending');
     setPreviewStage('live');
-    // Ordem: garante álbum DESLIGADO, registra (com o IP certo), depois liga o álbum
+    // Ordem: garante álbum DESLIGADO e religa (register é só Hisi — no M310 não existe)
     try { await camera.setAlbumMode?.(false).catch(() => false); } catch { /* best-effort */ }
-    try { await camera.registerClient?.(); } catch { /* best-effort */ }
     const ok = await camera.setAlbumMode?.(true).catch(() => false);
     setAlbumState(ok ? 'ok' : 'fail');
     if (!ok) {
