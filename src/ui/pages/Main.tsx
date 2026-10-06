@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings, Camera, Clock, ChevronRight } from 'lucide-react';
-import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { useAuth } from '../../context/AuthContext';
 import { useCamera } from '../../context/CameraContext';
 import { videoStorageService } from '../../services/VideoStorageService';
@@ -13,6 +13,21 @@ const LIVE_URL = 'http://192.168.0.1/cgi-bin/liveMJPEG';
 const STATIC_URL = 'http://192.168.0.1/cgi-bin/staticMJPEG';
 const LIVE_CGI_URL = 'http://192.168.0.1/cgi-bin/liveMJPEG.cgi';
 const STATIC_CGI_URL = 'http://192.168.0.1/cgi-bin/staticMJPEG.cgi';
+
+// A M310 Plus só serve preview ao vivo via RTSP (igual ao app oficial, que
+// usa IjkPlayer/FFmpeg). MJPEG por <img> nunca funcionou nesse modelo.
+// No APK o stream é tocado por um PlayerView nativo (ExoPlayer) sobre o WebView.
+const RTSP_URL = 'rtsp://192.168.0.1:554/livestream/12';
+const IS_NATIVE = Capacitor.isNativePlatform();
+
+interface RtspLivePluginApi {
+  start(opts: { url: string; x: number; y: number; width: number; height: number }): Promise<void>;
+  setRect(opts: { x: number; y: number; width: number; height: number }): Promise<void>;
+  stop(): Promise<void>;
+  addListener(event: 'state', cb: (data: { state: string; message?: string }) => void): Promise<{ remove: () => void }>;
+}
+const RtspLive = registerPlugin<RtspLivePluginApi>('RtspLive');
+type RtspStatus = 'idle' | 'loading' | 'playing' | 'error';
 
 type PreviewStage = 'live' | 'liveCgi' | 'static' | 'staticCgi' | 'error';
 const STAGE_ORDER: PreviewStage[] = ['live', 'liveCgi', 'static', 'staticCgi', 'error'];
@@ -28,6 +43,8 @@ export default function Main() {
   const [previewRetry, setPreviewRetry] = useState(0);
   const [probeStatus, setProbeStatus] = useState('');
   const [albumState, setAlbumState] = useState<'pending' | 'ok' | 'fail'>('pending');
+  const [rtspStatus, setRtspStatus] = useState<RtspStatus>('idle');
+  const previewRef = useRef<HTMLDivElement>(null);
 
   // Sonda álbum + endpoints e mostra o resultado (register é só Hisi — removido)
   const probePreview = async () => {
@@ -115,9 +132,66 @@ export default function Main() {
 
   // Quando conectar: registra o app, liga o modo álbum e SÓ DEPOIS libera
   // o preview (antes o <img> carregava antes do comando chegar à câmera).
+  // No APK nativo o preview é RTSP (player nativo), sem modo álbum.
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || IS_NATIVE) return;
     startPreview();
+  }, [isConnected, camera]);
+
+  // Preview nativo RTSP: PlayerView (ExoPlayer) sobreposto ao container.
+  // Se o RTSP falhar, cai no fluxo MJPEG/álbum como plano B.
+  useEffect(() => {
+    if (!isConnected || !IS_NATIVE) return;
+    let disposed = false;
+    let listener: { remove: () => void } | null = null;
+    setRtspStatus('loading');
+
+    const rect = () => {
+      const el = previewRef.current;
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left, y: r.top, width: r.width, height: r.height };
+    };
+    const startNative = async () => {
+      const r = rect();
+      if (!r || r.width < 10) return;
+      try {
+        await RtspLive.start({ url: RTSP_URL, ...r });
+      } catch {
+        if (!disposed) { setRtspStatus('error'); startPreview(); }
+      }
+    };
+    const reposition = () => {
+      const r = rect();
+      if (r && r.width >= 10) RtspLive.setRect(r).catch(() => { /* view pode não existir */ });
+    };
+
+    RtspLive.addListener('state', data => {
+      if (disposed) return;
+      if (data.state === 'ready' || data.state === 'playing') setRtspStatus('playing');
+      if (data.state === 'error') {
+        setRtspStatus('error');
+        RtspLive.stop().catch(() => { /* já parado */ });
+        startPreview(); // plano B: MJPEG assinado
+      }
+    }).then(h => { listener = h; });
+
+    // Espera 1 frame para o container ter sido medido/renderizado
+    requestAnimationFrame(startNative);
+    const ro = new ResizeObserver(reposition);
+    if (previewRef.current) ro.observe(previewRef.current);
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+
+    return () => {
+      disposed = true;
+      listener?.remove();
+      ro.disconnect();
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+      RtspLive.stop().catch(() => { /* já parado */ });
+      setRtspStatus('idle');
+    };
   }, [isConnected, camera]);
 
   useEffect(() => () => {
@@ -232,15 +306,22 @@ export default function Main() {
 
         <ConnectionGuide />
 
-        <div className="w-full aspect-video bg-brand-card rounded-2xl border border-white/5 overflow-hidden relative shadow-lg mb-10 flex flex-col items-center justify-center">
-          {isConnected && (
+        <div ref={previewRef} className="w-full aspect-video bg-brand-card rounded-2xl border border-white/5 overflow-hidden relative shadow-lg mb-10 flex flex-col items-center justify-center">
+          {isConnected && (!IS_NATIVE || rtspStatus !== 'playing') && (
             <div className="absolute top-3 left-3 z-10 bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg flex items-center gap-2 text-xs font-medium border border-white/10">
               <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
               AO VIVO
             </div>
           )}
 
-          {isConnected && albumState === 'ok' && previewStage !== 'error' ? (
+          {isConnected && IS_NATIVE && rtspStatus !== 'error' ? (
+            rtspStatus !== 'playing' && (
+              <>
+                <Loader2 size={40} className="text-brand-muted/30 mb-2 animate-spin" />
+                <p className="text-brand-muted text-sm">Abrindo transmissão ao vivo...</p>
+              </>
+            )
+          ) : isConnected && albumState === 'ok' && previewStage !== 'error' ? (
             <img
               key={`${previewStage}-${previewRetry}`}
               src={stageSrc}

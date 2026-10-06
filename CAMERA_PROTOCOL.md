@@ -162,6 +162,22 @@ O **M300 e M310 Plus usam o protocolo `cardvapi` (Mstar)**. Toda a nossa impleme
 
 ---
 
+## ✅ Preview ao vivo — RESOLVIDO (2026-10-06)
+
+O app oficial **não usa MJPEG** para o preview: ele toca o stream **RTSP**
+(`rtsp://192.168.0.1:554/livestream/12`) com o player nativo **IjkPlayer/FFmpeg**
+(`libijkplayer.so`, `playLiveStream`, config `Camera.Preview.RTSP.av` nos DEX).
+
+Por isso o preview nunca funcionou no nosso app: a M310 Plus não serve
+`/cgi-bin/liveMJPEG` e nenhum WebView/`<img>` toca RTSP.
+
+**Solução implementada:** plugin nativo `RtspLivePlugin` (Capacitor) com
+**ExoPlayer Media3 + módulo RTSP**, que sobrepõe um `PlayerView` ao WebView
+no retângulo do container do preview (Main.tsx). Fallback para MJPEG/álbum
+permanece para o navegador.
+
+---
+
 ## ❓ O que ainda precisamos descobrir (via Wireshark/proxy)
 
 1. **Parâmetros exatos do `Config.cgi`** para:

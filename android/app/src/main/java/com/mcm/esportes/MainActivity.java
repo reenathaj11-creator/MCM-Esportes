@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(RtspProbePlugin.class);
+        registerPlugin(RtspLivePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
