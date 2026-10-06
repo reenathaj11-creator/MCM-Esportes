@@ -182,60 +182,47 @@ export class Real70maiProtocol {
     let lastConfirm = '';
     const seenCodes = new Set<string>();
     try {
-      // 1) Bind: primeiro o fluxo oficial (usr NUMÉRICO, como o app 70mai),
-      //    que devolve Token + timestamp. Se vier resposta seca, cai para seed.
-      //    Com o ID real da conta 70mai, o token sai com licença de stream.
+      // 1) Bind OFICIAL (igual ao app 70mai): Config.cgi?action=get&BindByBanya=<usr>
+      //    Resposta: "0\nOK\nBindByBanya=<ts>+<token>". Sem timestamp no request!
       onProgress('Enviando solicitação de pareamento...');
       const cleanId = (accountId ?? '').trim();
-      const numericId = /^\d+$/.test(cleanId)
+      const usr = /^\d+$/.test(cleanId)
         ? cleanId
         : String(Math.floor(1000000 + Math.random() * 9000000));
       if (/^\d+$/.test(cleanId)) onProgress('Usando ID da sua conta 70mai...');
 
-      const doBind = async (usr: string): Promise<{ token: string; timestamp: string }> => {
-        const url = `${BASE_URL}/cgi-bin/BindByBanya.cgi?&-usr=${usr}&-signkey=${this.pairKey(usr)}`;
-        const { status, text } = await this.httpGetText(url);
-        bindText = text;
-        if (status !== 200) throw new Error(`HTTP ${status}: ${text.slice(0, 200)}`);
-        const resp = parseCameraJson(text);
-        if (resp.ResultCode !== '0') throw new Error(`Pareamento recusado: ${text.slice(0, 200)}`);
-        const result = resp.Result as Record<string, unknown> | null;
-        return {
-          token: String(result?.Token ?? result?.token ?? ''),
-          timestamp: String(result?.timestamp ?? result?.Timestamp ?? ''),
-        };
-      };
-
-      let bind = await doBind(numericId).catch(() => null);
-      let seed = '';
-      if (!bind || !bind.token || !bind.timestamp) {
-        // Fallback: M310 Plus com resposta "resultcode: 0" seca aceita o seed
-        seed = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
-        bind = await doBind(seed);
-        if (!bind.timestamp) bind.timestamp = String(Math.floor(Date.now() / 1000));
+      const bindUrl = `${BASE_URL}/cgi-bin/Config.cgi?action=get&BindByBanya=${encodeURIComponent(usr)}&signkey=${this.pairKey(usr)}`;
+      const { status, text } = await this.httpGetText(bindUrl);
+      bindText = text;
+      if (status !== 200) throw new Error(`HTTP ${status}: ${text.slice(0, 200)}`);
+      const bindNorm = text.replace(/\r\n/g, '\n');
+      if (bindNorm.startsWith('703\n')) {
+        throw new Error(`Câmera retornou 703 (sessão existente?): ${bindNorm.slice(0, 160)}`);
       }
-      // M300 devolve um Token novo no corpo; na resposta seca usa-se o seed.
-      const realToken = bind.token || seed;
+      if (!bindNorm.startsWith('0\nOK\n')) throw new Error(`Pareamento recusado: ${bindNorm.slice(0, 200)}`);
+      const bindMatch = /bindbybanya=([^\n]+)/i.exec(bindNorm);
+      const bindParts = (bindMatch?.[1] ?? '').split('+');
+      const ts = (bindParts[0] ?? '').trim();
+      const realToken = (bindParts[1] ?? '').trim();
+      if (!ts || !realToken) throw new Error(`Resposta de Bind inesperada: ${bindNorm.slice(0, 200)}`);
+      onProgress('Câmera respondeu. Aperte o botão dela agora!');
 
-      // 2/3) Aguarda confirmação física na câmera
-      onProgress(bind.token
-        ? 'Câmera respondeu com token. Aperte o botão dela agora!'
-        : 'Câmera aceitou o vínculo (sem token na resposta — usando o seed). Aperte o botão dela agora!');
-      const confirmUrl = `${BASE_URL}/cgi-bin/UserconfirmByBanya.cgi?&-timestamp=${bind.timestamp}&-signkey=${this.pairKey(bind.timestamp)}`;
+      // 2/3) Poll OFICIAL: Config.cgi?action=set&UserconfirmByBanya=<ts>
+      //    Aguardando = "709…"; confirmado = "0\nOK\n"; erro = "701…".
+      const confirmUrl = `${BASE_URL}/cgi-bin/Config.cgi?action=set&UserconfirmByBanya=${encodeURIComponent(ts)}&signkey=${this.pairKey(ts)}`;
 
       for (let attempt = 0; attempt < 30; attempt++) {
         await new Promise(r => setTimeout(r, 1000));
         try {
-          const { text: confirmText, status: confirmStatus } = await this.httpGetText(confirmUrl, 4000);
-          lastConfirm = `HTTP ${confirmStatus}: ${confirmText.slice(0, 160)}`;
-          const confirmResp = parseCameraJson(confirmText);
-          seenCodes.add(confirmResp.ResultCode || '(vazio)');
+          const { text: confirmText } = await this.httpGetText(confirmUrl, 4000);
+          const confirmNorm = confirmText.replace(/\r\n/g, '\n');
+          const firstLine = confirmNorm.split('\n')[0] ?? '';
+          lastConfirm = confirmNorm.slice(0, 160);
+          seenCodes.add(firstLine || '(vazio)');
           if (attempt % 5 === 0 || attempt < 2) {
-            onProgress(`⚠️ Aperte o botão de confirmação da câmera agora! (${attempt + 1}s/30s) Última: ${lastConfirm}`);
+            onProgress(`⚠️ Aperte o botão de confirmação da câmera agora! (${attempt + 1}s/30s) Última: ${firstLine}`);
           }
-          if (confirmResp.ResultCode === '0') {
+          if (confirmNorm.startsWith('0\nOK\n')) {
             // 4) Token definitivo registrado localmente
             // (client.cgi register é exclusivo dos modelos Hisi — no M310 não existe)
             localStorage.setItem(TOKEN_STORAGE_KEY, realToken);
@@ -251,8 +238,11 @@ export class Real70maiProtocol {
             localStorage.removeItem(TOKEN_STORAGE_KEY);
             throw new Error(`Token rejeitado pela câmera. Resposta: ${JSON.stringify(check).slice(0, 200)}`);
           }
+          if (confirmNorm.startsWith('701\n')) {
+            throw new Error(`Câmera recusou o pareamento (701): ${confirmNorm.slice(0, 160)}`);
+          }
         } catch (e: any) {
-          if (e?.message?.includes('Token rejeitado')) throw e;
+          if (/Token rejeitado|recusou o pareamento/.test(e?.message ?? '')) throw e;
           if (!lastConfirm) lastConfirm = `erro: ${String(e?.message ?? e).slice(0, 120)}`;
           // tenta de novo
         }
