@@ -23,7 +23,7 @@ public class RtspProbePlugin extends Plugin {
 
     @PluginMethod
     public void describe(PluginCall call) {
-        String url = call.getString("url");
+        final String url = call.getString("url");
         if (url == null || url.isEmpty()) {
             call.reject("URL vazia");
             return;
@@ -41,33 +41,41 @@ public class RtspProbePlugin extends Plugin {
                 try {
                     socket.connect(new InetSocketAddress(host, port), 5000);
                     socket.setSoTimeout(6000);
-                    String req = "DESCRIBE " + url + " RTSP/1.0\r\n"
-                            + "CSeq: 1\r\n"
-                            + "Accept: application/sdp\r\n"
-                            + "User-Agent: MCM-Esportes\r\n"
-                            + "\r\n";
-                    OutputStream out = socket.getOutputStream();
-                    out.write(req.getBytes(StandardCharsets.US_ASCII));
-                    out.flush();
-
-                    BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
                     StringBuilder headers = new StringBuilder();
-                    String line;
                     int status = 0;
-                    boolean first = true;
-                    while ((line = reader.readLine()) != null) {
-                        if (first) {
-                            first = false;
-                            // Esperado: RTSP/1.0 200 OK
-                            String[] parts = line.split(" ", 3);
-                            if (parts.length >= 2) {
-                                try { status = Integer.parseInt(parts[1]); } catch (NumberFormatException ignored) {}
-                            }
+                    // 1) OPTIONS (alguns firmwares só falam depois dele)
+                    try {
+                        String optReq = "OPTIONS " + url + " RTSP/1.0\r\n"
+                                + "CSeq: 1\r\n"
+                                + "User-Agent: MCM-Esportes\r\n"
+                                + "\r\n";
+                        OutputStream optOut = socket.getOutputStream();
+                        optOut.write(optReq.getBytes(StandardCharsets.US_ASCII));
+                        optOut.flush();
+                        headers.append(readHeaders(socket));
+                    } catch (Exception e) {
+                        headers.append("OPTIONS-erro: ").append(e.getMessage()).append("\n");
+                    }
+                    // 2) DESCRIBE
+                    try {
+                        String req = "DESCRIBE " + url + " RTSP/1.0\r\n"
+                                + "CSeq: 2\r\n"
+                                + "Accept: application/sdp\r\n"
+                                + "User-Agent: MCM-Esportes\r\n"
+                                + "\r\n";
+                        OutputStream out = socket.getOutputStream();
+                        out.write(req.getBytes(StandardCharsets.US_ASCII));
+                        out.flush();
+                        String desc = readHeaders(socket);
+                        headers.append(desc);
+                        // Extrai o status da primeira linha do DESCRIBE
+                        String first = desc.contains("\n") ? desc.substring(0, desc.indexOf("\n")) : desc;
+                        String[] parts = first.split(" ", 3);
+                        if (parts.length >= 2) {
+                            try { status = Integer.parseInt(parts[1]); } catch (NumberFormatException ignored) {}
                         }
-                        headers.append(line).append("\n");
-                        if (line.isEmpty()) break; // fim dos headers
-                        if (headers.length() > 2000) break;
+                    } catch (Exception e) {
+                        headers.append("DESCRIBE-erro: ").append(e.getMessage()).append("\n");
                     }
                     JSObject ret = new JSObject();
                     ret.put("ok", status == 200);
@@ -85,5 +93,19 @@ public class RtspProbePlugin extends Plugin {
                 call.resolve(ret);
             }
         }).start();
+    }
+
+    /** Lê os headers da resposta até a linha vazia (limite 2KB) */
+    private String readHeaders(Socket socket) throws Exception {
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
+        StringBuilder sb = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            sb.append(line).append("\n");
+            if (line.isEmpty()) break;
+            if (sb.length() > 2000) break;
+        }
+        return sb.toString();
     }
 }

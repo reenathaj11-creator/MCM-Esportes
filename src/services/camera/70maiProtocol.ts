@@ -234,7 +234,8 @@ export class Real70maiProtocol {
             // 4) Registra o cliente com o token definitivo
             localStorage.setItem(TOKEN_STORAGE_KEY, realToken);
             onProgress('Confirmado! Registrando app...');
-            await this.registerClient(); // best-effort
+            const reg = await this.debugRegister().catch(() => ({ http: 0, code: 'erro', body: '' }));
+            onProgress(`Confirmado! Registro: HTTP ${reg.http} code ${reg.code} ${reg.body.slice(0, 80)}`);
 
             // 5) Validação real: um comando autenticado tem que funcionar
             onProgress('Validando acesso...');
