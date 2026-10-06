@@ -8,6 +8,8 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.rtsp.RtspMediaSource;
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
 
@@ -88,7 +90,15 @@ public class RtspLivePlugin extends Plugin {
         ViewGroup root = getActivity().findViewById(android.R.id.content);
         root.addView(playerView, new FrameLayout.LayoutParams(1, 1));
 
-        player = new ExoPlayer.Builder(getContext()).build();
+        // Força RTP via TCP: por UDP (padrão) a câmera abre a sessão mas os
+        // pacotes de vídeo não chegam -> tela preta sem erro.
+        RtspMediaSource.Factory rtspFactory = new RtspMediaSource.Factory()
+                .setForceUseRtpTcp(true)
+                .setTimeoutMs(10000);
+        player = new ExoPlayer.Builder(getContext())
+                .setMediaSourceFactory(new DefaultMediaSourceFactory(getContext())
+                        .setLiveTargetOffsetMs(500))
+                .build();
         playerView.setPlayer(player);
         player.setVolume(0f); // preview silencioso
         currentUrl = url;
@@ -116,9 +126,18 @@ public class RtspLivePlugin extends Plugin {
             }
         });
 
-        player.setMediaItem(MediaItem.fromUri(url));
+        player.setMediaSource(rtspFactory.createMediaSource(MediaItem.fromUri(url)));
         player.prepare();
         player.setPlayWhenReady(true);
+
+        // Cão de guarda: se em 15s não chegou vídeo (sessão abre mas stream
+        // não vem), avisa o JS para cair no plano B (MJPEG/diagnóstico).
+        final ExoPlayer p = player;
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            if (player == p && p != null && p.getPlaybackState() != Player.STATE_READY) {
+                emit("timeout");
+            }
+        }, 15000);
     }
 
     private void emit(String state) {

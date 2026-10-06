@@ -169,7 +169,7 @@ export default function Main() {
     RtspLive.addListener('state', data => {
       if (disposed) return;
       if (data.state === 'ready' || data.state === 'playing') setRtspStatus('playing');
-      if (data.state === 'error') {
+      if (data.state === 'error' || data.state === 'timeout') {
         setRtspStatus('error');
         RtspLive.stop().catch(() => { /* já parado */ });
         startPreview(); // plano B: MJPEG assinado
