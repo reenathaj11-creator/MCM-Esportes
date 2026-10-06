@@ -14,6 +14,9 @@ const RTSP_PATHS = [
   'livestream/12',
   'livestream/13',
   'livestream/11',
+  'livestream/10',
+  'livestream/14',
+  '',
   'liveRTSP/av1',
   'liveRTSP/av2',
   'liveRTSP/av4',
@@ -34,6 +37,10 @@ const TRIALS: Trial[] = [
   { key: 'dev', label: 'Dispositivo', cmd: 'getdeviceattr.cgi', params: {} },
   { key: 'ws', label: 'WiFiStream (sem params)', cmd: 'setwifistream.cgi', params: {} },
   { key: 'ws1', label: 'WiFiStream enable=1', cmd: 'setwifistream.cgi', params: { enable: 1 } },
+  { key: 'lic', label: 'Stream licensed', cmd: 'getstreamlicensed.cgi', params: {} },
+  { key: 'dvr', label: 'Estado DVR', cmd: 'getdvrstate.cgi', params: {} },
+  { key: 'par', label: 'Parâmetros', cmd: 'getparameter.cgi', params: {} },
+  { key: 'photoraw', label: 'Foto (código cru)', cmd: 'photo.cgi', params: {} },
 ];
 
 export const PreviewLab = () => {
