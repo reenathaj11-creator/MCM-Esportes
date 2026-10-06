@@ -289,6 +289,18 @@ export const AdminSettings: React.FC = () => {
             </div>
             {tokenMsg && <p className="text-xs mt-2 text-neutral-300">{tokenMsg}</p>}
           </div>
+
+          {/* Desparear */}
+          {pairedToken && (
+            <div className="pt-4 mt-4 border-t border-neutral-800">
+              <button
+                onClick={() => { camera.unpair?.(); window.location.reload(); }}
+                className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-bold rounded-lg transition"
+              >
+                Desparear deste aparelho (permite parear de novo)
+              </button>
+            </div>
+          )}
         </div>
 
       </div>
