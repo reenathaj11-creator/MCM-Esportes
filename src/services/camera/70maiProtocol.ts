@@ -426,6 +426,18 @@ export class Real70maiProtocol {
     }
   }
 
+  /** URL assinada pronta (para <img>/fetch manual) */
+  signedCommandUrl(command: string, params: Record<string, string | number> = {}): string {
+    return this.signedUrl(command, params);
+  }
+
+  /** Resposta crua (até 8KB) para diagnóstico em campo */
+  async debugRaw(command: string, params: Record<string, string | number> = {}): Promise<{ http: number; text: string }> {
+    const url = this.signedUrl(command, params);
+    const { status, text } = await this.httpGetText(url, 15000);
+    return { http: status, text: text.slice(0, 8000) };
+  }
+
   /** Executa um comando e devolve o cru (HTTP + código + trecho) para diagnóstico em campo */
   async debugCommand(
     command: string,

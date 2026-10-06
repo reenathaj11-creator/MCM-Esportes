@@ -59,6 +59,10 @@ export interface CameraService {
   previewUrl?(kind: 'live' | 'static' | 'live-cgi' | 'static-cgi'): string;
   /** Comando cru para diagnóstico (HTTP + código + trecho) */
   debugCommand?(command: string, params?: Record<string, string | number>): Promise<{ http: number; code: string; body: string }>;
+  /** URL assinada pronta (para <img>/fetch manual) */
+  signedCommandUrl?(command: string, params?: Record<string, string | number>): string;
+  /** Resposta crua (até 8KB) para diagnóstico em campo */
+  debugRaw?(command: string, params?: Record<string, string | number>): Promise<{ http: number; text: string }>;
   getMediaFiles(): Promise<MediaFile[]>;
   getLatestVideo(): Promise<MediaFile | null>;
   downloadVideo(file: MediaFile): Promise<Blob>;

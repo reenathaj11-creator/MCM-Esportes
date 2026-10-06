@@ -3,6 +3,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import Main from './ui/pages/Main';
 import { Gallery } from './ui/pages/Gallery';
 import { Diagnostics } from './ui/pages/Diagnostics';
+import { PreviewLab } from './ui/pages/PreviewLab';
 import { TestPage } from './ui/pages/TestPage';
 import Login from './ui/pages/Login';
 import Register from './ui/pages/Register';
@@ -17,7 +18,7 @@ function BottomNav() {
   const location = useLocation();
   const { role } = useAuth();
   
-  if (['/login', '/register', '/diagnostics', '/camera-test'].includes(location.pathname) || location.pathname.includes('/video/')) {
+  if (['/login', '/register', '/diagnostics', '/lab', '/camera-test'].includes(location.pathname) || location.pathname.includes('/video/')) {
     return null;
   }
 
@@ -58,6 +59,7 @@ function App() {
             <Route path="/settings" element={<ProtectedRoute requireAdmin><AdminSettings /></ProtectedRoute>} />
             
             <Route path="/diagnostics" element={<Diagnostics />} />
+            <Route path="/lab" element={<PreviewLab />} />
             <Route path="/camera-test" element={<TestPage />} />
           </Routes>
           <BottomNav />

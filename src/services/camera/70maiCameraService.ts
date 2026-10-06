@@ -110,6 +110,16 @@ export class Xiaomi70maiCameraService implements CameraService {
     return this.protocol.debugCommand(command, params);
   }
 
+  /** URL assinada pronta (para <img>/fetch manual) */
+  signedCommandUrl(command: string, params: Record<string, string | number> = {}): string {
+    return this.protocol.signedCommandUrl(command, params);
+  }
+
+  /** Resposta crua (até 8KB) para diagnóstico em campo */
+  async debugRaw(command: string, params: Record<string, string | number> = {}): Promise<{ http: number; text: string }> {
+    return this.protocol.debugRaw(command, params);
+  }
+
   // ----- Arquivos -----
 
   private toMediaFile(entry: { path: string; name: string; size: number }): MediaFile {

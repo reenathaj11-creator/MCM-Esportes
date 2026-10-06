@@ -7,7 +7,7 @@ import { useCamera } from '../../context/CameraContext';
 import { videoStorageService } from '../../services/VideoStorageService';
 import { LocalVideo } from '../../types/camera';
 import { ConnectionGuide } from '../components/ConnectionGuide';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { RefreshCw, Loader2, FlaskConical } from 'lucide-react';
 
 const LIVE_URL = 'http://192.168.0.1/cgi-bin/liveMJPEG';
 const STATIC_URL = 'http://192.168.0.1/cgi-bin/staticMJPEG';
@@ -275,6 +275,11 @@ export default function Main() {
               >
                 <RefreshCw size={14} /> Tentar novamente
               </button>
+              <button
+                onClick={() => navigate('/lab')}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-card border border-white/10 text-white text-xs font-bold rounded-xl"
+              >
+                <FlaskConical size={14} /> Laboratório
             </>
           ) : (
             <>
