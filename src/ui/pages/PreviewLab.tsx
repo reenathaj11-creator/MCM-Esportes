@@ -41,6 +41,7 @@ const TRIALS: Trial[] = [
   { key: 'dvr', label: 'Estado DVR', cmd: 'getdvrstate.cgi', params: {} },
   { key: 'par', label: 'Parâmetros', cmd: 'getparameter.cgi', params: {} },
   { key: 'photoraw', label: 'Foto (código cru)', cmd: 'photo.cgi', params: {} },
+  { key: 'skc', label: 'SecretKeyConfirm', cmd: 'SecretKeyConfirm.cgi', params: {} },
 ];
 
 export const PreviewLab = () => {
@@ -50,6 +51,7 @@ export const PreviewLab = () => {
   const [copied, setCopied] = useState(false);
   const [photoSrc, setPhotoSrc] = useState('');
   const [photoMsg, setPhotoMsg] = useState('');
+  const [freePath, setFreePath] = useState('/');
 
   const runTrial = async (t: Trial) => {
     if (!camera.debugRaw) return;
@@ -69,6 +71,20 @@ export const PreviewLab = () => {
     if (!camera.signedCommandUrl) return;
     setPhotoMsg('Carregando foto...');
     setPhotoSrc(camera.signedCommandUrl('photo.cgi'));
+  };
+
+  const runFreeGet = async () => {
+    if (!camera.debugGet) return;
+    setRunning('freeget');
+    setResult(null);
+    try {
+      const r = await camera.debugGet(freePath.trim() || '/');
+      setResult({ label: `GET ${freePath}`, http: r.http, text: r.text });
+    } catch (e: any) {
+      setResult({ label: `GET ${freePath}`, http: 0, text: String(e?.message ?? e) });
+    } finally {
+      setRunning(null);
+    }
   };
 
   const runRtspSweep = async () => {
@@ -140,8 +156,25 @@ export const PreviewLab = () => {
           className="py-3 px-2 bg-emerald-700 hover:bg-emerald-600 rounded-xl text-sm font-bold flex items-center justify-center gap-2 col-span-2 disabled:opacity-50"
         >
           {running === 'rtsp' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />}
-          Varredura RTSP (8 paths)
+          Varredura RTSP (11 paths)
         </button>
+        <div className="col-span-2 flex gap-2">
+          <input
+            value={freePath}
+            onChange={e => setFreePath(e.target.value)}
+            placeholder="/ (raiz do servidor da câmera)"
+            autoCapitalize="none"
+            autoCorrect="off"
+            className="flex-1 px-3 py-3 bg-gray-800 rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-gray-600"
+          />
+          <button
+            onClick={runFreeGet}
+            disabled={running !== null}
+            className="py-3 px-4 bg-gray-700 hover:bg-gray-600 rounded-xl text-sm font-bold disabled:opacity-50"
+          >
+            {running === 'freeget' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'GET'}
+          </button>
+        </div>
       </div>
 
       {photoSrc !== '' && (

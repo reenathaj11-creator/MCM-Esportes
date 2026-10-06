@@ -120,6 +120,11 @@ export class Xiaomi70maiCameraService implements CameraService {
     return this.protocol.debugRaw(command, params);
   }
 
+  /** GET livre em path da câmera — só leitura, sem auth */
+  async debugGet(path: string): Promise<{ http: number; text: string }> {
+    return this.protocol.debugGet(path);
+  }
+
   // ----- Arquivos -----
 
   private toMediaFile(entry: { path: string; name: string; size: number }): MediaFile {

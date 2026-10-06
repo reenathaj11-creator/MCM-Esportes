@@ -444,6 +444,13 @@ export class Real70maiProtocol {
     return { http: status, text: text.slice(0, 8000) };
   }
 
+  /** GET livre em path da câmera (ex.: / , /etc/passwd) — só leitura, sem auth */
+  async debugGet(path: string): Promise<{ http: number; text: string }> {
+    const p = path.startsWith('/') ? path : `/${path}`;
+    const { status, text } = await this.httpGetText(`${BASE_URL}${p}`, 10000);
+    return { http: status, text: text.slice(0, 4000) };
+  }
+
   /** Executa um comando e devolve o cru (HTTP + código + trecho) para diagnóstico em campo */
   async debugCommand(
     command: string,

@@ -63,6 +63,8 @@ export interface CameraService {
   signedCommandUrl?(command: string, params?: Record<string, string | number>): string;
   /** Resposta crua (até 8KB) para diagnóstico em campo */
   debugRaw?(command: string, params?: Record<string, string | number>): Promise<{ http: number; text: string }>;
+  /** GET livre em path da câmera — só leitura, sem auth */
+  debugGet?(path: string): Promise<{ http: number; text: string }>;
   getMediaFiles(): Promise<MediaFile[]>;
   getLatestVideo(): Promise<MediaFile | null>;
   downloadVideo(file: MediaFile): Promise<Blob>;
