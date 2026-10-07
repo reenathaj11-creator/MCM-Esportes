@@ -469,6 +469,15 @@ export class Real70maiProtocol {
   async enableLiveStream(): Promise<string> {
     const logs: string[] = [];
     try { await this.command('setaccessalbum.cgi', { enable: 0 }).catch(() => null); } catch { /* best-effort */ }
+    // O app oficial registra o cliente a cada poucos segundos e a câmera
+    // valida o IP de origem (register com IP errado devolve -5555).
+    // Sem register válido o servidor RTSP pode ficar mudo.
+    try {
+      const reg = await this.debugRegister();
+      logs.push(`register: ${reg.code} ${reg.body.slice(0, 60)}`);
+    } catch (e: any) {
+      logs.push(`register: ${String(e?.message ?? e).slice(0, 60)}`);
+    }
     try {
       const r = await this.debugCommand('setwifistream.cgi', { enable: 1 });
       logs.push(`setwifistream enable=1: HTTP ${r.http} code ${r.code}`);
