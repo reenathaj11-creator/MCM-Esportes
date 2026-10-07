@@ -83,6 +83,22 @@ export const PreviewLab = () => {
     }
   };
 
+  // Testa 5 construções de signkey no client.cgi oficial (sem hífens).
+  // A certa volta code 0 igual ao app oficial (conexão #97 do PCAPdroid).
+  const runRegisterFormats = async () => {
+    if (!camera.testRegisterFormats) return;
+    setRunning('regfmt');
+    setResult(null);
+    try {
+      const text = await camera.testRegisterFormats();
+      setResult({ label: 'Register signkey formats', http: 200, text });
+    } catch (e: any) {
+      setResult({ label: 'Register signkey formats', http: 0, text: String(e?.message ?? e) });
+    } finally {
+      setRunning(null);
+    }
+  };
+
   const tryPhoto = () => {
     if (!camera.signedCommandUrl) return;
     setPhotoMsg('Carregando foto...');
@@ -260,6 +276,14 @@ export const PreviewLab = () => {
         >
           {running === 'ports' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />}
           Varredura de portas (HTTP+RTSP)
+        </button>
+        <button
+          onClick={runRegisterFormats}
+          disabled={running !== null}
+          className="py-3 px-2 bg-violet-700 hover:bg-violet-600 rounded-xl text-sm font-bold flex items-center justify-center gap-2 col-span-2 disabled:opacity-50"
+        >
+          {running === 'regfmt' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />}
+          Testa signkey do register (5 formatos)
         </button>
         <div className="col-span-2 flex gap-2">
           <input

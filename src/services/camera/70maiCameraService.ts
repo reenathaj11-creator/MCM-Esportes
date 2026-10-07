@@ -135,6 +135,11 @@ export class Xiaomi70maiCameraService implements CameraService {
     return this.protocol.enableLiveStream();
   }
 
+  /** Testa variações de signkey no client.cgi oficial (diagnóstico) */
+  async testRegisterFormats(): Promise<string> {
+    return this.protocol.testRegisterFormats();
+  }
+
   // ----- Arquivos -----
 
   private toMediaFile(entry: { path: string; name: string; size: number }): MediaFile {

@@ -69,6 +69,8 @@ export interface CameraService {
   configRaw?(action: 'get' | 'set', prop: string, value?: string): Promise<{ http: number; text: string }>;
   /** Liga o servidor de stream da câmera antes do RTSP (setwifistream + RTSP.av). Best-effort, nunca lança. */
   enableLiveStream?(): Promise<string>;
+  /** Testa variações de signkey no client.cgi oficial (diagnóstico) */
+  testRegisterFormats?(): Promise<string>;
   getMediaFiles(): Promise<MediaFile[]>;
   getLatestVideo(): Promise<MediaFile | null>;
   downloadVideo(file: MediaFile): Promise<Blob>;

@@ -421,14 +421,16 @@ export class Real70maiProtocol {
    * ip 192.168.1.15); se falhar, cai no formato cardvapi com o IP real.
    */
   async debugRegister(): Promise<{ http: number; code: string; body: string }> {
+    let officialNote = '';
     try {
       const official = await this.registerOfficial();
       if (official.code === '0') {
         localStorage.setItem(CLIENT_IP_KEY, '192.168.1.15');
         return { http: official.http, code: official.code, body: 'oficial ip=192.168.1.15 ok' };
       }
+      officialNote = `oficial ${official.http}/${official.code} ${official.body.slice(0, 60)} | `;
     } catch (e: any) {
-      // segue para o formato legado
+      officialNote = `oficial erro ${String(e?.message ?? e).slice(0, 60)} | `;
     }
     const tried: string[] = [];
     const cached = localStorage.getItem(CLIENT_IP_KEY);
@@ -449,7 +451,42 @@ export class Real70maiProtocol {
         return { http: last.http, code: last.code, body: `ip=${ip} ok (ordem: ${tried.join(',')})` };
       }
     }
-    return { http: last.http, code: last.code, body: `falhou em ${tried.join(',')} | última: ${last.body}` };
+    return { http: last.http, code: last.code, body: `${officialNote}falhou em ${tried.join(',')} | última: ${last.body}` };
+  }
+
+  /**
+   * Testa variações de construção do signkey no client.cgi oficial
+   * (sem hífens). Devolve 1 linha por variante com HTTP + código.
+   * O formato certo é o que voltar code 0 como no app oficial.
+   */
+  async testRegisterFormats(): Promise<string> {
+    const token = this.getToken();
+    if (!token) return 'sem token pareado';
+    const ts = String(Math.floor(Date.now() / 1000));
+    const base = `operation=register&ip=192.168.1.15&timestamp=${ts}`;
+    const variants: Array<[string, string]> = [
+      ['A cmd?+token', md5(`client.cgi?${base}${token}`)],
+      ['B params+token', md5(`${base}${token}`)],
+      ['C token+cmd?', md5(`${token}client.cgi?${base}`)],
+      ['D sem token', md5(`client.cgi?${base}`)],
+      ['E token+params', md5(`${token}${base}`)],
+    ];
+    const out: string[] = [];
+    for (const [name, sign] of variants) {
+      try {
+        const url = `${BASE_URL}/cgi-bin/client.cgi?&${base}&signkey=${sign}`;
+        const { status, text } = await this.httpGetText(url, 8000, {
+          '_os_': 'Android', '_ver_': '4.4.0', '_product_': '70mai',
+        });
+        let code = '';
+        try { code = parseCameraJson(text).ResultCode || '(vazio)'; }
+        catch { code = '(ilegível)'; }
+        out.push(`${name}: HTTP ${status} code ${code}`);
+      } catch (e: any) {
+        out.push(`${name}: ${String(e?.message ?? e).slice(0, 60)}`);
+      }
+    }
+    return out.join(' | ');
   }
 
   /**
