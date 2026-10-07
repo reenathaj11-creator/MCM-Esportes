@@ -90,16 +90,16 @@ function parseCameraJson(text: string): CameraJsonResponse {
 export class Real70maiProtocol {
   // ---------- HTTP ----------
 
-  private async httpGetText(url: string, timeoutMs = 8000): Promise<{ status: number; text: string }> {
+  private async httpGetText(url: string, timeoutMs = 8000, headers: Record<string, string> = {}): Promise<{ status: number; text: string }> {
     if (Capacitor.isNativePlatform()) {
-      const resp = await CapacitorHttp.get({ url, connectTimeout: timeoutMs, readTimeout: timeoutMs });
+      const resp = await CapacitorHttp.get({ url, connectTimeout: timeoutMs, readTimeout: timeoutMs, headers });
       const text = typeof resp.data === 'string' ? resp.data : JSON.stringify(resp.data ?? '');
       return { status: resp.status, text };
     }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    const resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    const resp = await fetch(url, { signal: controller.signal, cache: 'no-store', headers });
     clearTimeout(timeout);
     return { status: resp.status, text: await resp.text() };
   }
@@ -390,11 +390,46 @@ export class Real70maiProtocol {
   }
 
   /**
-   * Registra testando o IP real do celular: a câmera parece validar o IP
-   * de origem (register com IP errado devolve -5555). Tenta o IP em cache,
-   * o detectado via WebRTC e candidatos comuns; guarda o que funcionar.
+   * Registro no formato EXATO do app oficial (PCAPdroid 10/06, conexão #97):
+   *   GET /cgi-bin/client.cgi?&operation=register&ip=192.168.1.15
+   *       &timestamp=<seg>&signkey=<md5 sem hífens + token>
+   *   headers _os_: Android, _ver_: 4.4.0, _product_: 70mai
+   *   → {"ResultCode":"0"}
+   * O formato cardvapi com hífens (-operation=...) devolve -5555 na M310.
+   * O ip 192.168.1.15 é constante no APK oficial (literal no DEX).
+   */
+  private async registerOfficial(): Promise<{ http: number; code: string; body: string }> {
+    const token = this.getToken();
+    if (!token) throw new Error('Câmera não pareada');
+    const ts = String(Math.floor(Date.now() / 1000));
+    const paramsStr = `operation=register&ip=192.168.1.15&timestamp=${ts}`;
+    const sign = md5(`client.cgi?${paramsStr}${token}`);
+    const url = `${BASE_URL}/cgi-bin/client.cgi?&${paramsStr}&signkey=${sign}`;
+    const { status, text } = await this.httpGetText(url, 8000, {
+      '_os_': 'Android',
+      '_ver_': '4.4.0',
+      '_product_': '70mai',
+    });
+    let code = '';
+    try { code = parseCameraJson(text).ResultCode || '(vazio)'; }
+    catch { code = '(binário/ilegível)'; }
+    return { http: status, code, body: text.slice(0, 120) };
+  }
+
+  /**
+   * Registra o app na câmera. Tenta 1º o formato oficial (sem hífens,
+   * ip 192.168.1.15); se falhar, cai no formato cardvapi com o IP real.
    */
   async debugRegister(): Promise<{ http: number; code: string; body: string }> {
+    try {
+      const official = await this.registerOfficial();
+      if (official.code === '0') {
+        localStorage.setItem(CLIENT_IP_KEY, '192.168.1.15');
+        return { http: official.http, code: official.code, body: 'oficial ip=192.168.1.15 ok' };
+      }
+    } catch (e: any) {
+      // segue para o formato legado
+    }
     const tried: string[] = [];
     const cached = localStorage.getItem(CLIENT_IP_KEY);
     const rtcIps = await detectLocalIps().catch(() => [] as string[]);
