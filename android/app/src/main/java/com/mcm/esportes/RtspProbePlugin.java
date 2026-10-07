@@ -85,6 +85,100 @@ public class RtspProbePlugin extends Plugin {
         }).start();
     }
 
+    /**
+     * Sonda HTTP na câmera (porta 80): devolve status, headers e os
+     * primeiros bytes do corpo em HEX. Para stream infinito (FLV), o
+     * começo do corpo prova que o endpoint transmite vídeo — o socket
+     * é fechado logo em seguida para não baixar o stream inteiro.
+     * path ex.: "/liveRTSP/av1"
+     */
+    @PluginMethod
+    public void httpProbe(PluginCall call) {
+        final String path = call.getString("path");
+        if (path == null || path.isEmpty()) {
+            call.reject("Path vazio");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                Socket socket = new Socket();
+                try {
+                    socket.connect(new InetSocketAddress("192.168.0.1", 80), 5000);
+                    socket.setSoTimeout(6000);
+                    String req = "GET " + path + " HTTP/1.0\r\n"
+                            + "Host: 192.168.0.1\r\n"
+                            + "User-Agent: MCM-Esportes\r\n"
+                            + "Accept: */*\r\n"
+                            + "\r\n";
+                    socket.getOutputStream().write(req.getBytes(StandardCharsets.US_ASCII));
+                    socket.getOutputStream().flush();
+                    // Lê resposta como bytes crus (headers ASCII + corpo binário).
+                    java.io.InputStream in = socket.getInputStream();
+                    java.io.ByteArrayOutputStream head = new java.io.ByteArrayOutputStream();
+                    int status = 0;
+                    String headers = "";
+                    try {
+                        int prev3 = -1, prev2 = -1, prev1 = -1;
+                        while (head.size() < 4000) {
+                            int b = in.read();
+                            if (b == -1) break;
+                            head.write(b);
+                            if (prev3 == '\r' && prev2 == '\n' && prev1 == '\r' && b == '\n') break;
+                            prev3 = prev2; prev2 = prev1; prev1 = b;
+                        }
+                        headers = new String(head.toByteArray(), StandardCharsets.US_ASCII);
+                        String first = headers.contains("\n") ? headers.substring(0, headers.indexOf("\n")) : headers;
+                        String[] parts = first.trim().split(" ", 3);
+                        if (parts.length >= 2) {
+                            try { status = Integer.parseInt(parts[1]); } catch (NumberFormatException ignored) {}
+                        }
+                    } catch (java.net.SocketTimeoutException ste) {
+                        headers = "(timeout lendo headers) " + new String(head.toByteArray(), StandardCharsets.US_ASCII);
+                    }
+                    // Primeiros bytes do corpo (até 32) em HEX — identifica
+                    // FLV ("46 4C 56"), JPEG ("FF D8") ou JSON ("7B 22").
+                    StringBuilder hex = new StringBuilder();
+                    try {
+                        // BufferedReader do readHeaders pode ter consumido o
+                        // corpo junto; usa available() sem bloquear além do timeout.
+                        long deadline = System.currentTimeMillis() + 4000;
+                        int count = 0;
+                        while (count < 32 && System.currentTimeMillis() < deadline) {
+                            try {
+                                int b = in.read();
+                                if (b == -1) break;
+                                if (hex.length() > 0) hex.append(" ");
+                                String h = Integer.toHexString(b & 0xFF).toUpperCase();
+                                if (h.length() == 1) hex.append("0");
+                                hex.append(h);
+                                count++;
+                                if (in.available() == 0 && count >= 12) break;
+                            } catch (java.net.SocketTimeoutException ste) {
+                                break;
+                            }
+                        }
+                        if (count == 0) hex.append("(corpo vazio/timeout)");
+                    } catch (Exception e) {
+                        hex.append("(corpo: ").append(e.getMessage()).append(")");
+                    }
+                    JSObject ret = new JSObject();
+                    ret.put("ok", status == 200);
+                    ret.put("status", status);
+                    ret.put("detail", headers.toString() + "[corpo " + hex.toString() + "]");
+                    call.resolve(ret);
+                } finally {
+                    try { socket.close(); } catch (Exception ignored) {}
+                }
+            } catch (Exception e) {
+                JSObject ret = new JSObject();
+                ret.put("ok", false);
+                ret.put("status", 0);
+                ret.put("detail", e.getClass().getSimpleName() + ": " + e.getMessage());
+                call.resolve(ret);
+            }
+        }).start();
+    }
+
     /** Lê os headers da resposta até a linha vazia (limite 2KB) */
     private String readHeaders(Socket socket) throws Exception {
         BufferedReader reader = new BufferedReader(

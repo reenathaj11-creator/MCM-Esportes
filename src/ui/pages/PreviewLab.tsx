@@ -6,6 +6,7 @@ import { useCamera } from '../../context/CameraContext';
 
 interface RtspProbe {
   describe(opts: { url: string }): Promise<{ ok: boolean; status: number; detail: string }>;
+  httpProbe(opts: { path: string }): Promise<{ ok: boolean; status: number; detail: string }>;
 }
 
 const RtspProbePlugin = registerPlugin<RtspProbe>('RtspProbe');
@@ -22,6 +23,16 @@ const RTSP_PATHS = [
   'liveRTSP/av4',
   'liveRTSP/av5',
   'liveRTSP/v1',
+];
+
+// O APK oficial referencia "x-flv" + paths /liveRTSP/* — pode ser o
+// preview real via HTTP-FLV (que o IJK toca) enquanto o RTSP fica mudo.
+const HTTP_FLV_PATHS = [
+  '/liveRTSP/av1',
+  '/liveRTSP/av2',
+  '/liveRTSP/v1',
+  '/liveRTSP/av4',
+  '/liveRTSP/av5',
 ];
 
 interface Trial {
@@ -125,6 +136,35 @@ export const PreviewLab = () => {
     setRunning(null);
   };
 
+  // Sonda HTTP-FLV: GET cru na porta 80 (sem CORS), mostra status +
+  // content-type + primeiros bytes. 200 video/x-flv com "46 4C 56" = stream!
+  const runHttpSweep = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      setResult({ label: 'HTTP-FLV sweep', http: 0, text: 'Só funciona no APK (plugin nativo).' });
+      return;
+    }
+    setRunning('httpflv');
+    setResult(null);
+    const lines: string[] = [];
+    try {
+      const log = await camera.enableLiveStream?.();
+      if (log) lines.push(`enable: ${log}`);
+    } catch (e: any) {
+      lines.push(`enable: ${String(e?.message ?? e).slice(0, 80)}`);
+    }
+    for (const p of HTTP_FLV_PATHS) {
+      try {
+        const r = await RtspProbePlugin.httpProbe({ path: p });
+        const flat = r.detail.replace(/\n/g, ' | ').slice(0, 300);
+        lines.push(`${p}: ${r.status} ${flat} ${r.ok ? '✅' : ''}`);
+      } catch (e: any) {
+        lines.push(`${p}: erro ${String(e?.message ?? e).slice(0, 80)}`);
+      }
+    }
+    setResult({ label: 'HTTP-FLV sweep', http: 200, text: lines.join('\n') });
+    setRunning(null);
+  };
+
   const copyResult = async () => {
     if (!result) return;
     try {
@@ -174,6 +214,14 @@ export const PreviewLab = () => {
         >
           {running === 'rtsp' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />}
           Varredura RTSP (11 paths)
+        </button>
+        <button
+          onClick={runHttpSweep}
+          disabled={running !== null}
+          className="py-3 px-2 bg-teal-700 hover:bg-teal-600 rounded-xl text-sm font-bold flex items-center justify-center gap-2 col-span-2 disabled:opacity-50"
+        >
+          {running === 'httpflv' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />}
+          Varredura HTTP-FLV (/liveRTSP)
         </button>
         <div className="col-span-2 flex gap-2">
           <input
