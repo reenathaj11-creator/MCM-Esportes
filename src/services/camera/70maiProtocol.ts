@@ -455,38 +455,46 @@ export class Real70maiProtocol {
   }
 
   /**
-   * Testa variações de construção do signkey no client.cgi oficial
-   * (sem hífens). Devolve 1 linha por variante com HTTP + código.
-   * O formato certo é o que voltar code 0 como no app oficial.
+   * Testa matriz IP × construção de signkey no client.cgi oficial.
+   * Fundo: PCAPdroid mostra nossa requisição byte-igual à oficial (#97)
+   * exceto signkey/timestamp, mas tudo volta -5555 — então varia o que
+   * pode entrar no hash (leading &, path) e o IP (conflito com o registro
+   * do app oficial no mesmo 192.168.1.15). Reporta hits code 0 + total.
    */
   async testRegisterFormats(): Promise<string> {
     const token = this.getToken();
     if (!token) return 'sem token pareado';
     const ts = String(Math.floor(Date.now() / 1000));
-    const base = `operation=register&ip=192.168.1.15&timestamp=${ts}`;
-    const variants: Array<[string, string]> = [
-      ['A cmd?+token', md5(`client.cgi?${base}${token}`)],
-      ['B params+token', md5(`${base}${token}`)],
-      ['C token+cmd?', md5(`${token}client.cgi?${base}`)],
-      ['D sem token', md5(`client.cgi?${base}`)],
-      ['E token+params', md5(`${token}${base}`)],
-    ];
-    const out: string[] = [];
-    for (const [name, sign] of variants) {
-      try {
-        const url = `${BASE_URL}/cgi-bin/client.cgi?&${base}&signkey=${sign}`;
-        const { status, text } = await this.httpGetText(url, 8000, {
-          '_os_': 'Android', '_ver_': '4.4.0', '_product_': '70mai',
-        });
-        let code = '';
-        try { code = parseCameraJson(text).ResultCode || '(vazio)'; }
-        catch { code = '(ilegível)'; }
-        out.push(`${name}: HTTP ${status} code ${code}`);
-      } catch (e: any) {
-        out.push(`${name}: ${String(e?.message ?? e).slice(0, 60)}`);
+    const headers = {
+      '_os_': 'Android', '_ver_': '4.4.0', '_product_': '70mai',
+      'User-Agent': 'volley/0',
+    };
+    const ips = ['192.168.1.15', '192.168.0.20', '192.168.1.16'];
+    const hits: string[] = [];
+    let tried = 0;
+    for (const ip of ips) {
+      const base = `operation=register&ip=${ip}&timestamp=${ts}`;
+      const variants: Array<[string, string]> = [
+        ['cmd?+token', md5(`client.cgi?${base}${token}`)],
+        ['raw&', md5(`client.cgi?${'&' + base}${token}`)],
+        ['path', md5(`/cgi-bin/client.cgi?${'&' + base}${token}`)],
+        ['params+token', md5(`${base}${token}`)],
+        ['sem token', md5(`client.cgi?${base}`)],
+      ];
+      for (const [name, sign] of variants) {
+        tried++;
+        try {
+          const url = `${BASE_URL}/cgi-bin/client.cgi?&${base}&signkey=${sign}`;
+          const { text } = await this.httpGetText(url, 5000, headers);
+          let code = '';
+          try { code = parseCameraJson(text).ResultCode || '(vazio)'; }
+          catch { code = '(ilegível)'; }
+          if (code === '0') hits.push(`HIT ip=${ip} ${name}`);
+        } catch { /* tenta próxima */ }
       }
     }
-    return out.join(' | ');
+    if (hits.length > 0) return hits.join(' | ');
+    return `0 hits em ${tried} tentativas (3 ips x 5 algos), tudo -5555 ou erro`;
   }
 
   /**
