@@ -6,7 +6,7 @@ import { useCamera } from '../../context/CameraContext';
 
 interface RtspProbe {
   describe(opts: { url: string }): Promise<{ ok: boolean; status: number; detail: string }>;
-  httpProbe(opts: { path: string }): Promise<{ ok: boolean; status: number; detail: string }>;
+  httpProbe(opts: { path: string; port?: number }): Promise<{ ok: boolean; status: number; detail: string }>;
 }
 
 const RtspProbePlugin = registerPlugin<RtspProbe>('RtspProbe');
@@ -136,8 +136,38 @@ export const PreviewLab = () => {
     setRunning(null);
   };
 
-  // Sonda HTTP-FLV: GET cru na porta 80 (sem CORS), mostra status +
-  // content-type + primeiros bytes. 200 video/x-flv com "46 4C 56" = stream!
+  // Varredura de portas: o RTSP pode não estar na 554 na M310 Plus.
+  // Para cada porta: HTTP GET / (vê se é thttpd/CGI) + RTSP DESCRIBE
+  // em livestream/12 (vê se responde RTSP). Resposta diferente de
+  // timeout = porta com serviço.
+  const PORT_SWEEP = [554, 8554, 8080, 8000, 5000, 1935, 7070, 5544];
+  const runPortSweep = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      setResult({ label: 'Port sweep', http: 0, text: 'Só funciona no APK (plugin nativo).' });
+      return;
+    }
+    setRunning('ports');
+    setResult(null);
+    const lines: string[] = [];
+    for (const port of PORT_SWEEP) {
+      try {
+        const h = await RtspProbePlugin.httpProbe({ path: '/', port });
+        const flat = h.detail.replace(/\n/g, ' | ').slice(0, 160);
+        lines.push(`HTTP :${port} → ${h.status} ${flat}`);
+      } catch (e: any) {
+        lines.push(`HTTP :${port} → erro ${String(e?.message ?? e).slice(0, 80)}`);
+      }
+      try {
+        const r = await RtspProbePlugin.describe({ url: `rtsp://192.168.0.1:${port}/livestream/12` });
+        const first = r.detail.split('\n')[0] ?? '';
+        lines.push(`RTSP :${port} → ${r.status} ${first.slice(0, 120)} ${r.ok ? '✅' : ''}`);
+      } catch (e: any) {
+        lines.push(`RTSP :${port} → erro ${String(e?.message ?? e).slice(0, 80)}`);
+      }
+    }
+    setResult({ label: 'Port sweep', http: 200, text: lines.join('\n') });
+    setRunning(null);
+  };
   const runHttpSweep = async () => {
     if (!Capacitor.isNativePlatform()) {
       setResult({ label: 'HTTP-FLV sweep', http: 0, text: 'Só funciona no APK (plugin nativo).' });
@@ -222,6 +252,14 @@ export const PreviewLab = () => {
         >
           {running === 'httpflv' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />}
           Varredura HTTP-FLV (/liveRTSP)
+        </button>
+        <button
+          onClick={runPortSweep}
+          disabled={running !== null}
+          className="py-3 px-2 bg-cyan-700 hover:bg-cyan-600 rounded-xl text-sm font-bold flex items-center justify-center gap-2 col-span-2 disabled:opacity-50"
+        >
+          {running === 'ports' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />}
+          Varredura de portas (HTTP+RTSP)
         </button>
         <div className="col-span-2 flex gap-2">
           <input

@@ -43,6 +43,27 @@ public class RtspProbePlugin extends Plugin {
                     socket.setSoTimeout(6000);
                     StringBuilder headers = new StringBuilder();
                     int status = 0;
+                    // 1) OPTIONS * (forma pedida pela RFC; o Fing identifica
+                    // o serviço na 554, então ele responde a algo — testa se
+                    // o problema era o URI completo no OPTIONS).
+                    try {
+                        String optReq = "OPTIONS * RTSP/1.0\r\n"
+                                + "CSeq: 1\r\n"
+                                + "User-Agent: MCM-Esportes\r\n"
+                                + "\r\n";
+                        OutputStream optOut = socket.getOutputStream();
+                        optOut.write(optReq.getBytes(StandardCharsets.US_ASCII));
+                        optOut.flush();
+                        headers.append(readHeaders(socket));
+                    } catch (Exception e) {
+                        headers.append("OPTIONS-erro: ").append(e.getMessage()).append("\n");
+                    }
+                    socket.close();
+                    // 2) DESCRIBE em socket novo (o anterior pode estar
+                    // dessincronizado se o OPTIONS falhou no meio).
+                    socket = new Socket();
+                    socket.connect(new InetSocketAddress(host, port), 5000);
+                    socket.setSoTimeout(6000);
                     // DESCRIBE direto: alguns firmwares 70mai não respondem ao
                     // OPTIONS e a espera trava o socket (todos os paths davam
                     // "OPTIONS-erro: Read timed out"). DESCRIBE basta para
@@ -95,6 +116,8 @@ public class RtspProbePlugin extends Plugin {
     @PluginMethod
     public void httpProbe(PluginCall call) {
         final String path = call.getString("path");
+        final Integer portOpt = call.getInt("port");
+        final int port = (portOpt == null || portOpt <= 0) ? 80 : portOpt;
         if (path == null || path.isEmpty()) {
             call.reject("Path vazio");
             return;
@@ -103,7 +126,7 @@ public class RtspProbePlugin extends Plugin {
             try {
                 Socket socket = new Socket();
                 try {
-                    socket.connect(new InetSocketAddress("192.168.0.1", 80), 5000);
+                    socket.connect(new InetSocketAddress("192.168.0.1", port), 5000);
                     socket.setSoTimeout(6000);
                     String req = "GET " + path + " HTTP/1.0\r\n"
                             + "Host: 192.168.0.1\r\n"
