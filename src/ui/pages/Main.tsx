@@ -392,7 +392,7 @@ export default function Main() {
               <Camera size={40} className="text-brand-muted/30 mb-2" />
               <p className="text-brand-muted text-sm mb-3">Preview indisponível no momento</p>
               {probeStatus && (
-                <p className="text-[11px] font-mono text-brand-muted/80 mb-3 px-4 text-center break-words">{probeStatus}</p>
+                <pre className="text-[11px] font-mono text-brand-muted/80 mb-3 px-4 py-2 mx-4 max-w-full max-h-28 overflow-auto whitespace-pre-wrap break-all bg-black/40 rounded-lg text-left">{probeStatus}</pre>
               )}
               <button
                 onClick={retryPreview}
