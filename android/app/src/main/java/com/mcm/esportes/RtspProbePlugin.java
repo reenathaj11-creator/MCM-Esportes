@@ -43,23 +43,13 @@ public class RtspProbePlugin extends Plugin {
                     socket.setSoTimeout(6000);
                     StringBuilder headers = new StringBuilder();
                     int status = 0;
-                    // 1) OPTIONS (alguns firmwares só falam depois dele)
-                    try {
-                        String optReq = "OPTIONS " + url + " RTSP/1.0\r\n"
-                                + "CSeq: 1\r\n"
-                                + "User-Agent: MCM-Esportes\r\n"
-                                + "\r\n";
-                        OutputStream optOut = socket.getOutputStream();
-                        optOut.write(optReq.getBytes(StandardCharsets.US_ASCII));
-                        optOut.flush();
-                        headers.append(readHeaders(socket));
-                    } catch (Exception e) {
-                        headers.append("OPTIONS-erro: ").append(e.getMessage()).append("\n");
-                    }
-                    // 2) DESCRIBE
+                    // DESCRIBE direto: alguns firmwares 70mai não respondem ao
+                    // OPTIONS e a espera trava o socket (todos os paths davam
+                    // "OPTIONS-erro: Read timed out"). DESCRIBE basta para
+                    // saber se o path existe (200) ou não (404).
                     try {
                         String req = "DESCRIBE " + url + " RTSP/1.0\r\n"
-                                + "CSeq: 2\r\n"
+                                + "CSeq: 1\r\n"
                                 + "Accept: application/sdp\r\n"
                                 + "User-Agent: MCM-Esportes\r\n"
                                 + "\r\n";

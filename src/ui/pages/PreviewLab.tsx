@@ -100,6 +100,18 @@ export const PreviewLab = () => {
     setRunning('rtsp');
     setResult(null);
     const lines: string[] = [];
+    // O servidor RTSP da 70mai fica desligado até o app mandar setwifistream.
+    // Sem isso todos os paths dão "Read timed out" mesmo com o path certo.
+    try {
+      const log = await camera.enableLiveStream?.();
+      if (log) lines.push(`enable: ${log}`);
+    } catch (e: any) {
+      lines.push(`enable: ${String(e?.message ?? e).slice(0, 80)}`);
+    }
+    try {
+      const reg = await camera.registerClient?.().catch(() => false);
+      lines.push(`register: ${reg ? 'ok' : 'falha (normal no M310)'}`);
+    } catch { lines.push('register: falha'); }
     for (const p of RTSP_PATHS) {
       try {
         const r = await RtspProbePlugin.describe({ url: `rtsp://192.168.0.1:554/${p}` });

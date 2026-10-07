@@ -117,8 +117,9 @@ export default function Main() {
     setProbeStatus(out.join(' | '));
   };
 
-  const startPreview = async () => {
-    setProbeStatus('');
+  const startPreview = async (keepLog = '') => {
+    if (!keepLog) setProbeStatus('');
+    else setProbeStatus(prev => `${prev} ${keepLog}`.slice(0, 500));
     setAlbumState('pending');
     setPreviewStage('live');
     // Ordem: garante álbum DESLIGADO e religa (register é só Hisi — no M310 não existe)
@@ -184,11 +185,31 @@ export default function Main() {
         setRtspStatus('loading');
         RtspLive.stop().catch(() => { /* já parado */ });
         // Pequena pausa para a câmera liberar a sessão anterior
-        setTimeout(() => { if (!disposed) startNative(); }, 800);
+        setTimeout(() => { if (!disposed) startNativeWithoutEnable(); }, 800);
       } else {
         setRtspStatus('error');
         RtspLive.stop().catch(() => { /* já parado */ });
-        startPreview(); // plano B: MJPEG assinado
+        // Preserva o log RTSP: startPreview limpava tudo e o usuário só via
+        // "Abrindo transmissão..." sumir rápido.
+        setProbeStatus(prev => {
+          const keep = `${prev} | RTSP falhou nos 3 paths`;
+          setTimeout(() => startPreview(keep), 0);
+          return prev;
+        });
+      }
+    };
+    // Re-tentativas de path reusam o stream já ligado (sem reenviar CGI)
+    const startNativeWithoutEnable = async () => {
+      const r = rect();
+      if (!r || r.width < 10) return;
+      try {
+        await RtspLive.start({ url: RTSP_URL(RTSP_PATHS[pathIndex]), ...r });
+        if (!disposed) setProbeStatus(prev => `${prev} | tocando ${RTSP_PATHS[pathIndex]}`);
+      } catch (e: any) {
+        if (!disposed) {
+          setProbeStatus(prev => `${prev} | erro ${RTSP_PATHS[pathIndex]}: ${String(e?.message ?? e).slice(0, 60)}`);
+          tryNextOrFallback();
+        }
       }
     };
     const reposition = () => {
