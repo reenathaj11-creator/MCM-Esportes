@@ -173,7 +173,7 @@ export default function Main() {
         if (!disposed) setProbeStatus(prev => `${prev} | tocando ${RTSP_PATHS[pathIndex]}`);
       } catch (e: any) {
         if (!disposed) {
-          setProbeStatus(`erro ${RTSP_PATHS[pathIndex]}: ${String(e?.message ?? e).slice(0, 80)}`);
+          setProbeStatus(prev => `${prev} | erro ${RTSP_PATHS[pathIndex]}: ${String(e?.message ?? e).slice(0, 80)}`.slice(-600));
           tryNextOrFallback();
         }
       }
@@ -221,7 +221,9 @@ export default function Main() {
       if (disposed) return;
       if (data.state === 'ready' || data.state === 'playing') setRtspStatus('playing');
       if (data.state === 'error' || data.state === 'timeout') {
-        setProbeStatus(`RTSP ${RTSP_PATHS[pathIndex]} ${data.state}${data.message ? `: ${data.message}` : ''} — tentando próximo...`);
+        // Append (não substitui): o log do enable (register/setwifistream)
+        // precisa sobreviver até a tela de erro.
+        setProbeStatus(prev => `${prev} | RTSP ${RTSP_PATHS[pathIndex]} ${data.state}${data.message ? `: ${data.message}` : ''}`.slice(-600));
         tryNextOrFallback();
       }
     }).then(h => { listener = h; });
