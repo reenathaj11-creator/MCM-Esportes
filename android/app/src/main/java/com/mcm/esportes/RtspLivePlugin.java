@@ -90,10 +90,14 @@ public class RtspLivePlugin extends Plugin {
         ViewGroup root = getActivity().findViewById(android.R.id.content);
         root.addView(playerView, new FrameLayout.LayoutParams(1, 1));
 
-        // Força RTP via TCP: por UDP (padrão) a câmera abre a sessão mas os
-        // pacotes de vídeo não chegam -> tela preta sem erro.
+        // PCAPdroid no app oficial (M310 Plus, sem SD): controle RTSP na
+        // 554 (2,4 KB) + vídeo em RTP/UDP unicast na porta do cliente
+        // (49152, 7,3 MB) com RTCP (49153). Ou seja: a câmera entrega o
+        // vídeo por UDP, como o app oficial pede (VLC/IJK com --rtsp-tcp
+        // é só o controle). Não forçar RTP-over-TCP: o servidor ignora
+        // SETUP interleaved e a sessão abre mas o vídeo nunca chega.
         RtspMediaSource.Factory rtspFactory = new RtspMediaSource.Factory()
-                .setForceUseRtpTcp(true)
+                .setForceUseRtpTcp(false)
                 .setTimeoutMs(10000);
         player = new ExoPlayer.Builder(getContext())
                 .setMediaSourceFactory(new DefaultMediaSourceFactory(getContext())
