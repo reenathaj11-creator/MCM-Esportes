@@ -43,13 +43,14 @@ public class RtspProbePlugin extends Plugin {
                     socket.setSoTimeout(6000);
                     StringBuilder headers = new StringBuilder();
                     int status = 0;
-                    // 1) OPTIONS * (forma pedida pela RFC; o Fing identifica
-                    // o serviço na 554, então ele responde a algo — testa se
-                    // o problema era o URI completo no OPTIONS).
+                    // Replica byte a byte o app oficial (PCAPdroid 10/06):
+                    // OPTIONS com URL completa + User-Agent Lavf (FFmpeg).
+                    // O servidor ("rtsp_demo") responde 200 a isso; com
+                    // "OPTIONS *" ou outro User-Agent ele ficava mudo.
                     try {
-                        String optReq = "OPTIONS * RTSP/1.0\r\n"
+                        String optReq = "OPTIONS " + url + " RTSP/1.0\r\n"
                                 + "CSeq: 1\r\n"
-                                + "User-Agent: MCM-Esportes\r\n"
+                                + "User-Agent: Lavf58.12.100\r\n"
                                 + "\r\n";
                         OutputStream optOut = socket.getOutputStream();
                         optOut.write(optReq.getBytes(StandardCharsets.US_ASCII));
@@ -59,20 +60,13 @@ public class RtspProbePlugin extends Plugin {
                         headers.append("OPTIONS-erro: ").append(e.getMessage()).append("\n");
                     }
                     socket.close();
-                    // 2) DESCRIBE em socket novo (o anterior pode estar
-                    // dessincronizado se o OPTIONS falhou no meio).
-                    socket = new Socket();
-                    socket.connect(new InetSocketAddress(host, port), 5000);
-                    socket.setSoTimeout(6000);
-                    // DESCRIBE direto: alguns firmwares 70mai não respondem ao
-                    // OPTIONS e a espera trava o socket (todos os paths davam
-                    // "OPTIONS-erro: Read timed out"). DESCRIBE basta para
-                    // saber se o path existe (200) ou não (404).
+                    // 2) DESCRIBE no MESMO socket, CSeq 2, mesmo User-Agent
+                    // (sequência exata do oficial: OPTIONS/1 → DESCRIBE/2).
                     try {
                         String req = "DESCRIBE " + url + " RTSP/1.0\r\n"
-                                + "CSeq: 1\r\n"
                                 + "Accept: application/sdp\r\n"
-                                + "User-Agent: MCM-Esportes\r\n"
+                                + "CSeq: 2\r\n"
+                                + "User-Agent: Lavf58.12.100\r\n"
                                 + "\r\n";
                         OutputStream out = socket.getOutputStream();
                         out.write(req.getBytes(StandardCharsets.US_ASCII));
