@@ -17,7 +17,8 @@ const STATIC_CGI_URL = 'http://192.168.0.1/cgi-bin/staticMJPEG.cgi';
 // A M310 Plus só serve preview ao vivo via RTSP (igual ao app oficial, que
 // usa IjkPlayer/FFmpeg). MJPEG por <img> nunca funcionou nesse modelo.
 // No APK o stream é tocado por um PlayerView nativo (ExoPlayer) sobre o WebView.
-const RTSP_URL = 'rtsp://192.168.0.1:554/livestream/12';
+const RTSP_PATHS = ['livestream/12', 'livestream/13', 'livestream/11'];
+const RTSP_URL = (p: string) => `rtsp://192.168.0.1:554/${p}`;
 const IS_NATIVE = Capacitor.isNativePlatform();
 
 interface RtspLivePluginApi {
@@ -139,12 +140,16 @@ export default function Main() {
   }, [isConnected, camera]);
 
   // Preview nativo RTSP: PlayerView (ExoPlayer) sobreposto ao container.
-  // Se o RTSP falhar, cai no fluxo MJPEG/álbum como plano B.
+  // Fluxo do app oficial: liga o servidor de stream (setwifistream enable=1)
+  // ANTES do play. Se um path falhar (timeout/erro), tenta o próximo
+  // (/12 -> /13 -> /11) antes de cair no plano B MJPEG.
   useEffect(() => {
     if (!isConnected || !IS_NATIVE) return;
     let disposed = false;
     let listener: { remove: () => void } | null = null;
+    let pathIndex = 0;
     setRtspStatus('loading');
+    setProbeStatus('ligando stream...');
 
     const rect = () => {
       const el = previewRef.current;
@@ -156,9 +161,34 @@ export default function Main() {
       const r = rect();
       if (!r || r.width < 10) return;
       try {
-        await RtspLive.start({ url: RTSP_URL, ...r });
-      } catch {
-        if (!disposed) { setRtspStatus('error'); startPreview(); }
+        // 1) Liga o servidor de stream na câmera (best-effort, com log visível)
+        try {
+          const log = await camera.enableLiveStream?.();
+          if (!disposed && log) setProbeStatus(log);
+        } catch { /* best-effort */ }
+        if (disposed) return;
+        // 2) Toca o RTSP no path atual
+        await RtspLive.start({ url: RTSP_URL(RTSP_PATHS[pathIndex]), ...r });
+        if (!disposed) setProbeStatus(prev => `${prev} | tocando ${RTSP_PATHS[pathIndex]}`);
+      } catch (e: any) {
+        if (!disposed) {
+          setProbeStatus(`erro ${RTSP_PATHS[pathIndex]}: ${String(e?.message ?? e).slice(0, 80)}`);
+          tryNextOrFallback();
+        }
+      }
+    };
+    const tryNextOrFallback = () => {
+      if (disposed) return;
+      pathIndex++;
+      if (pathIndex < RTSP_PATHS.length) {
+        setRtspStatus('loading');
+        RtspLive.stop().catch(() => { /* já parado */ });
+        // Pequena pausa para a câmera liberar a sessão anterior
+        setTimeout(() => { if (!disposed) startNative(); }, 800);
+      } else {
+        setRtspStatus('error');
+        RtspLive.stop().catch(() => { /* já parado */ });
+        startPreview(); // plano B: MJPEG assinado
       }
     };
     const reposition = () => {
@@ -170,9 +200,8 @@ export default function Main() {
       if (disposed) return;
       if (data.state === 'ready' || data.state === 'playing') setRtspStatus('playing');
       if (data.state === 'error' || data.state === 'timeout') {
-        setRtspStatus('error');
-        RtspLive.stop().catch(() => { /* já parado */ });
-        startPreview(); // plano B: MJPEG assinado
+        setProbeStatus(`RTSP ${RTSP_PATHS[pathIndex]} ${data.state}${data.message ? `: ${data.message}` : ''} — tentando próximo...`);
+        tryNextOrFallback();
       }
     }).then(h => { listener = h; });
 
@@ -319,6 +348,9 @@ export default function Main() {
               <>
                 <Loader2 size={40} className="text-brand-muted/30 mb-2 animate-spin" />
                 <p className="text-brand-muted text-sm">Abrindo transmissão ao vivo...</p>
+                {probeStatus && (
+                  <p className="text-[11px] font-mono text-brand-muted/80 mt-2 px-4 text-center break-words">{probeStatus}</p>
+                )}
               </>
             )
           ) : isConnected && albumState === 'ok' && previewStage !== 'error' ? (

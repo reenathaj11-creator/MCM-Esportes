@@ -130,6 +130,11 @@ export class Xiaomi70maiCameraService implements CameraService {
     return this.protocol.configRaw(action, prop, value);
   }
 
+  /** Liga o servidor de stream antes do RTSP (best-effort, devolve log) */
+  async enableLiveStream(): Promise<string> {
+    return this.protocol.enableLiveStream();
+  }
+
   // ----- Arquivos -----
 
   private toMediaFile(entry: { path: string; name: string; size: number }): MediaFile {

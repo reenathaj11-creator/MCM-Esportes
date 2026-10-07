@@ -67,6 +67,8 @@ export interface CameraService {
   debugGet?(path: string): Promise<{ http: number; text: string }>;
   /** Config.cgi no formato exato do app (snapshot, modo de preview) */
   configRaw?(action: 'get' | 'set', prop: string, value?: string): Promise<{ http: number; text: string }>;
+  /** Liga o servidor de stream da câmera antes do RTSP (setwifistream + RTSP.av). Best-effort, nunca lança. */
+  enableLiveStream?(): Promise<string>;
   getMediaFiles(): Promise<MediaFile[]>;
   getLatestVideo(): Promise<MediaFile | null>;
   downloadVideo(file: MediaFile): Promise<Blob>;

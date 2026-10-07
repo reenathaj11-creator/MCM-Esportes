@@ -461,6 +461,29 @@ export class Real70maiProtocol {
     return { http: status, text: text.slice(0, 8000) };
   }
 
+  /**
+   * Liga o servidor de stream antes do RTSP (fluxo do app oficial).
+   * Ordem: álbum OFF (volta a gravar) -> setwifistream enable=1 -> consulta RTSP.av.
+   * Best-effort: nunca lança, devolve log curto para exibir na tela.
+   */
+  async enableLiveStream(): Promise<string> {
+    const logs: string[] = [];
+    try { await this.command('setaccessalbum.cgi', { enable: 0 }).catch(() => null); } catch { /* best-effort */ }
+    try {
+      const r = await this.debugCommand('setwifistream.cgi', { enable: 1 });
+      logs.push(`setwifistream enable=1: HTTP ${r.http} code ${r.code}`);
+    } catch (e: any) {
+      logs.push(`setwifistream: ${String(e?.message ?? e).slice(0, 60)}`);
+    }
+    try {
+      const r = await this.configRaw('get', 'Camera.Preview.RTSP.av');
+      logs.push(`RTSP.av: HTTP ${r.http} ${r.text.slice(0, 80)}`);
+    } catch (e: any) {
+      logs.push(`RTSP.av: ${String(e?.message ?? e).slice(0, 60)}`);
+    }
+    return logs.join(' | ');
+  }
+
   /** GET livre em path da câmera (ex.: / , /etc/passwd) — só leitura, sem auth */
   async debugGet(path: string): Promise<{ http: number; text: string }> {
     const p = path.startsWith('/') ? path : `/${path}`;
